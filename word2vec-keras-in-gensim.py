@@ -34,7 +34,7 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
     if model.hs:
         y=np.zeros((len(model.vocab)), dtype=REAL)
         for k,i in enumerate(predict_word.code):
-            y[k]=i
+            y[predict_word.point[k]]=i
         x0=context_index
         x1=predict_word.index
         return (x0,x1,y)
