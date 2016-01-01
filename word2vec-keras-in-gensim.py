@@ -44,7 +44,9 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
 
 
 def train_batch_sg(model, sentences, alpha, work=None):
-    train_x=[[],[]]
+    train_x0=[]
+    train_x1=[]
+    #train_x=[]
     train_y=[]
     for sentence in sentences:
         word_vocabs = [model.vocab[w] for w in sentence if w in model.vocab and
@@ -60,10 +62,11 @@ def train_batch_sg(model, sentences, alpha, work=None):
                     xy=train_sg_pair(model, model.index2word[word.index], word2.index, alpha)
                     if xy !=None:
                         (x0,x1,y)=xy
-                        train_x[0].append([x0])
-                        train_x[1].append([x1])
+                        train_x0.append([x0])
+                        train_x1.append([x1])
                         train_y.append(y)
-                        
+    train_x=[np.array(train_x0),np.array(train_x1)]
+    train_y=np.array(train_y)
     return train_x,train_y
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
@@ -108,7 +111,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         if self.sg:
             self.build_keras_model()
             train_x,train_y=train_batch_sg(self, sentences, self.alpha, work=None)
-            self.kerasmodel.train_on_batch(train_x, train_y)
+            #self.kerasmodel.fit_generator(train_x, train_y)
+            self.kerasmodel.fit(train_x, train_y)
             self.syn0=self.kerasword.layers[0].get_weights()[0]
 
 
