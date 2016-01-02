@@ -15,6 +15,7 @@ from six import string_types, integer_types, itervalues
 import sys
 
 import numpy as np
+#import keras.models.fit_generator
 import keras.models
 import keras.layers.embeddings
 import keras.layers.core
@@ -46,7 +47,6 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
 def train_batch_sg(model, sentences, alpha, work=None):
     train_x0=[]
     train_x1=[]
-    #train_x=[]
     train_y=[]
     for sentence in sentences:
         word_vocabs = [model.vocab[w] for w in sentence if w in model.vocab and
@@ -62,6 +62,7 @@ def train_batch_sg(model, sentences, alpha, work=None):
                     xy=train_sg_pair(model, model.index2word[word.index], word2.index, alpha)
                     if xy !=None:
                         (x0,x1,y)=xy
+                        #yield x0,x1,y
                         train_x0.append([x0])
                         train_x1.append([x1])
                         train_y.append(y)
@@ -111,8 +112,9 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         if self.sg:
             self.build_keras_model()
             train_x,train_y=train_batch_sg(self, sentences, self.alpha, work=None)
-            #self.kerasmodel.fit_generator(train_x, train_y)
+            #print dir(self.kerasmodel)
             self.kerasmodel.fit(train_x, train_y)
+            #self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None))
             self.syn0=self.kerasword.layers[0].get_weights()[0]
 
 
