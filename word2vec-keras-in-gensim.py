@@ -89,9 +89,13 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                                 train_y.append(y)
                             else:
                                 #print idxs[batch_count]
-                                train_x0[idxs[batch_count]]=[x0]
-                                train_x1[idxs[batch_count]]=x1
-                                train_y[idxs[batch_count]]=y
+                                # train_x0[idxs[batch_count]]=[x0]
+                                # train_x1[idxs[batch_count]]=x1
+                                # train_y[idxs[batch_count]]=y
+
+                                train_x0[batch_count]=[x0]
+                                train_x1[batch_count]=x1
+                                train_y[batch_count]=y
                                 
                             batch_count += 1
                             
@@ -137,10 +141,11 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
     def train(self, sentences, total_words=None, word_count=0, chunksize=100, total_examples=None, queue_factor=2, report_delay=1):
         #print 'Word2VecKerastrain'
-        batch_size=2000
+        batch_size=800 ##optimized 1G mem video card
         if self.sg:
             self.build_keras_model()
-            samples_per_epoch=int(self.window*2*sum(map(len,sentences))/batch_size)
+            #samples_per_epoch=int(self.window*2*sum(map(len,sentences))/batch_size)
+            samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
             print 'samples_per_epoch',samples_per_epoch
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
@@ -155,16 +160,16 @@ if __name__ == "__main__":
     print brown.sents()[0]
 
     input_file = 'test.txt'
-    bk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=10)
+    bk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100)
     b = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
 
     print bk.most_similar('the', topn=5)
     print b.most_similar('the', topn=5)
 
-    br = gensim.models.word2vec.Word2Vec(brown.sents())
-    brk = Word2VecKeras(brown.sents(),iter=10)
+    # br = gensim.models.word2vec.Word2Vec(brown.sents())
+    # brk = Word2VecKeras(brown.sents(),iter=10)
 
-    print brk.most_similar('the', topn=5)
-    print br.most_similar('the', topn=5)
+    # print brk.most_similar('the', topn=5)
+    # print br.most_similar('the', topn=5)
 
     
