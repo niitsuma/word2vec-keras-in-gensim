@@ -38,11 +38,11 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
     if model.hs:
         y=np.zeros((len(model.vocab)), dtype=REAL)
         x1=np.zeros((len(model.vocab)), dtype=REAL)
-        for k,i in enumerate(predict_word.code):
-            y[predict_word.point[k]]=i
-            x1[predict_word.point[k]]=1
-        # x1[predict_word.point]=1
-        # y[predict_word.point]=predict_word.code
+        # for k,i in enumerate(predict_word.code):
+        #     y[predict_word.point[k]]=i
+        #     x1[predict_word.point[k]]=1
+        x1[predict_word.point]=1
+        y[predict_word.point]=predict_word.code
         x0=context_index
         #x1=predict_word.index
         return x0,x1,y
@@ -61,9 +61,7 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     # train_y=[]
 
     idxs = range(batch_size)
-    #print idxs
     random.shuffle(idxs)
-    #print idxs
     train_x0=[[]]*batch_count
     train_x1=[[]]*batch_count
     train_y=[[]]*batch_count
@@ -98,20 +96,11 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                             batch_count += 1
                             
                             if batch_count >= batch_size :
-                                #yield { 'index':np.array(x0), 'point':np.array(x1), 'code':np.array(y)}
-                                #print len(train_x0)
-                                # print train_x0[idxs]
-                                # sys.exit()
-                                #print train_x0
-                                
-
                                 # idxs = range(len(train_x0))
                                 # random.shuffle(idxs)
                                 # train_x0=train_x0[idxs]
                                 # train_x1=train_x1[idxs]
                                 # train_y=train_y[idxs]
-                                
-                                #print len(train_x0)
                                 #yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
                                 
                                 ax0=np.array(train_x0)
@@ -148,7 +137,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
     def train(self, sentences, total_words=None, word_count=0, chunksize=100, total_examples=None, queue_factor=2, report_delay=1):
         #print 'Word2VecKerastrain'
-        batch_size=500
+        batch_size=2000
         if self.sg:
             self.build_keras_model()
             samples_per_epoch=int(self.window*2*sum(map(len,sentences))/batch_size)
@@ -172,10 +161,10 @@ if __name__ == "__main__":
     print bk.most_similar('the', topn=5)
     print b.most_similar('the', topn=5)
 
-    # br = gensim.models.word2vec.Word2Vec(brown.sents())
-    # brk = Word2VecKeras(brown.sents(),iter=10)
+    br = gensim.models.word2vec.Word2Vec(brown.sents())
+    brk = Word2VecKeras(brown.sents(),iter=10)
 
-    # print brk.most_similar('the', topn=5)
-    # print br.most_similar('the', topn=5)
+    print brk.most_similar('the', topn=5)
+    print br.most_similar('the', topn=5)
 
     
