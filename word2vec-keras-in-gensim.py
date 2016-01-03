@@ -56,16 +56,10 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     
     batch_count=0
 
-    # train_x0=[]
-    # train_x1=[]
-    # train_y=[]
+    train_x0=[]
+    train_x1=[]
+    train_y=[]
 
-    idxs = range(batch_size)
-    random.shuffle(idxs)
-    train_x0=[[]]*batch_count
-    train_x1=[[]]*batch_count
-    train_y=[[]]*batch_count
-    
     while 1:
 
         for sentence in sentences:
@@ -88,39 +82,17 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                                 train_x1.append(x1)
                                 train_y.append(y)
                             else:
-                                #print idxs[batch_count]
-                                # train_x0[idxs[batch_count]]=[x0]
-                                # train_x1[idxs[batch_count]]=x1
-                                # train_y[idxs[batch_count]]=y
-
                                 train_x0[batch_count]=[x0]
                                 train_x1[batch_count]=x1
                                 train_y[batch_count]=y
+
+
                                 
                             batch_count += 1
                             
                             if batch_count >= batch_size :
-                                # idxs = range(len(train_x0))
-                                # random.shuffle(idxs)
-                                # train_x0=train_x0[idxs]
-                                # train_x1=train_x1[idxs]
-                                # train_y=train_y[idxs]
-                                #yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
-                                
-                                ax0=np.array(train_x0)
-                                ax1=np.array(train_x1)
-                                ay=np.array(train_y)
-                                yield { 'index':ax0, 'point':ax1, 'code':ay}
- 
-                                
+                                yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
                                 batch_count=0
-                                random.shuffle(idxs)
-                                # train_x0=[]
-                                # train_x1=[]
-                                # train_y=[]
-                            
-                            #yield { 'context_index':x0, 'predict_word.point':x1, 'predict_word.code':y}
-                            #yield { 'index':x0, 'point':x1, 'code':y}
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
@@ -144,9 +116,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         batch_size=800 ##optimized 1G mem video card
         if self.sg:
             self.build_keras_model()
-            #samples_per_epoch=int(self.window*2*sum(map(len,sentences))/batch_size)
             samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
-            print 'samples_per_epoch',samples_per_epoch
+            #print 'samples_per_epoch',samples_per_epoch
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
 
@@ -157,19 +128,19 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
 if __name__ == "__main__":
     from nltk.corpus import brown, movie_reviews, treebank
-    print brown.sents()[0]
+    print(brown.sents()[0])
 
     input_file = 'test.txt'
     bk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100)
     b = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
 
-    print bk.most_similar('the', topn=5)
-    print b.most_similar('the', topn=5)
+    print( bk.most_similar('the', topn=5))
+    print( b.most_similar('the', topn=5))
 
-    # br = gensim.models.word2vec.Word2Vec(brown.sents())
-    # brk = Word2VecKeras(brown.sents(),iter=10)
+    br = gensim.models.word2vec.Word2Vec(brown.sents())
+    brk = Word2VecKeras(brown.sents(),iter=10)
 
-    # print brk.most_similar('the', topn=5)
-    # print br.most_similar('the', topn=5)
+    print( brk.most_similar('the', topn=5))
+    print( br.most_similar('the', topn=5))
 
     
