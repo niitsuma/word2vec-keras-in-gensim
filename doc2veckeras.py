@@ -62,46 +62,47 @@ def train_batch_dbow(model,
                             batch_count=0
 
 
-# def train_batch_dm(model,
-#                        docs
-#                        #, doc_words
-#                        #, doctag_indexes
-#                        , alpha, work=None, neu1=None,
-#                           learn_doctags=True, learn_words=True, learn_hidden=True,
-#                           word_vectors=None, word_locks=None, doctag_vectors=None, doctag_locks=None,
-#                        batch_size=100):
-#     batch_count=0
-#     train_x0=[[0]]*batch_size
-#     train_x1=[[0]]*batch_size
-#     train_y=[[0]]*batch_size
-#     while 1:                      
-#         for doc in docs:
-#             for doctag_index in doc.tags:
-#                 #for word in doc.words:
-#                 word_vocabs = [model.vocab[w] for w in doc.words if w in model.vocab and
-#                        model.vocab[w].sample_int > model.random.rand() * 2**32]
+def train_batch_dm(model,
+                       docs
+                       #, doc_words
+                       #, doctag_indexes
+                       , alpha, work=None, neu1=None,
+                          learn_doctags=True, learn_words=True, learn_hidden=True,
+                          word_vectors=None, word_locks=None, doctag_vectors=None, doctag_locks=None,
+                       batch_size=100):
+    batch_count=0
+    train_x0=[[0]]*batch_size
+    train_x1=[[0]]*batch_size
+    train_y=[[0]]*batch_size
+    while 1:                      
+        for doc in docs:
+            for doctag_index in doc.tags:
+                #for word in doc.words:
+                word_vocabs = [model.vocab[w] for w in doc.words if w in model.vocab and
+                       model.vocab[w].sample_int > model.random.rand() * 2**32]
 
-#                 for pos, word in enumerate(word_vocabs):
-#                     reduced_window = model.random.randint(model.window)  # `b` in the original doc2vec code
-#                     start = max(0, pos - model.window + reduced_window)
-#                     window_pos = enumerate(word_vocabs[start:(pos + model.window + 1 - reduced_window)], start)
-#                     word2_indexes = [word2.index for pos2, word2 in window_pos if pos2 != pos]
-#                     l1 = np_sum(word_vectors[word2_indexes], axis=0) + np_sum(doctag_vectors[doctag_indexes], axis=0)
-#                     count = len(word2_indexes) + len(doctag_indexes)
-#                     if model.cbow_mean and count > 1 :
-#                         l1 /= count
-#                     neu1e = train_cbow_pair(model, word, word2_indexes, l1, alpha,
-#                                             learn_vectors=False, learn_hidden=learn_hidden)
-#                     if not model.cbow_mean and count > 1:
-#                         neu1e /= count
-#                     if learn_doctags:
-#                         for i in doctag_indexes:
-#                             doctag_vectors[i] += neu1e * doctag_locks[i]
-#                     if learn_words:
-#                         for i in word2_indexes:
-#                             word_vectors[i] += neu1e * word_locks[i]
+                for pos, word in enumerate(word_vocabs):
+                    reduced_window = model.random.randint(model.window)  # `b` in the original doc2vec code
+                    start = max(0, pos - model.window + reduced_window)
+                    window_pos = enumerate(word_vocabs[start:(pos + model.window + 1 - reduced_window)], start)
+                    word2_indexes = [word2.index for pos2, word2 in window_pos if pos2 != pos]
+                    
+                #     l1 = np_sum(word_vectors[word2_indexes], axis=0) + np_sum(doctag_vectors[doctag_indexes], axis=0)
+                #     count = len(word2_indexes) + len(doctag_indexes)
+                #     if model.cbow_mean and count > 1 :
+                #         l1 /= count
+                #     neu1e = train_cbow_pair(model, word, word2_indexes, l1, alpha,
+                #                             learn_vectors=False, learn_hidden=learn_hidden)
+                #     if not model.cbow_mean and count > 1:
+                #         neu1e /= count
+                #     if learn_doctags:
+                #         for i in doctag_indexes:
+                #             doctag_vectors[i] += neu1e * doctag_locks[i]
+                #     if learn_words:
+                #         for i in word2_indexes:
+                #             word_vectors[i] += neu1e * word_locks[i]
 
-#                 return len(word_vocabs)
+                # return len(word_vocabs)
 
                             
                             

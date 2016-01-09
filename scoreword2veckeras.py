@@ -207,6 +207,7 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
 
     def scan_vocab(self, scored_word_sentences, progress_per=10000, trim_rule=None):
         scored_word_sentences1,        scored_word_sentences2        =itertools.tee(scored_word_sentences)
+        
         sentences=(
             [
             #[scored_word2word(scored_word),scored_word2score(scored_word)]
@@ -214,9 +215,9 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
             for scored_word in scored_word_sentence ]
                    for scored_word_sentence in scored_word_sentences1)
         super(ScoreWord2VecKeras, self).scan_vocab(sentences, progress_per, trim_rule)
-        score_vec0=scored_word2score(scored_word_sentences2.next()[0])
-        self.score_vector_size=len(score_vec0)
 
+        score_vec0=scored_word2score(scored_word_sentences2.next())
+        self.score_vector_size=len(score_vec0)
         
 
     def train(self, scored_word_sentences, total_words=None, word_count=0, chunksize=100, total_examples=None, queue_factor=2, report_delay=1):
@@ -276,19 +277,38 @@ if __name__ == "__main__":
     input_file = 'test.txt'
 
     def dummy_score_vec(word):
-        return [len(word)/1.0,ord(word[0])/200.0 ]
+        return [len(word),ord(word[0])]
         #return [len(word)/0.2 ]
         
-    # sws=list(LineScoredWordSentence(input_file,dummy_score_vec))
-    # print sws[0]
-    # svk=ScoreWord2VecKeras( sws)
-    svk=ScoreWord2VecKeras( LineScoredWordSentence(input_file,dummy_score_vec),iter=100)
+    sws=list(LineScoredWordSentence(input_file,dummy_score_vec))
+    print sws[0]
+    
+    svk=ScoreWord2VecKeras(sws)
+    #svk=ScoreWord2VecKeras( LineScoredWordSentence(input_file,dummy_score_vec),iter=100)
+    svk.save_word2vec_format('tmp.vec')
+    svk.save('tmp.model')
     
     #print svk.score_vector_size
     #model1=build_keras_model_score_word_sg(index_size=3,vector_size=2,vocab_size=2,code_dim=2,score_vector_size=2)
 
-    print( svk.most_similar('the', topn=8))
+    #print( svk.most_similar('the', topn=8))
 
+    scored_word_list=[
+        ['This',[20*0.1,10*0.2]],
+        ['is',[10*0.1,5*0.2]],
+        ['a',[30*0.1,10*0.2]],
+        ['pen',[10*0.1,5*0.2]],
+        ['.',[3*0.1,5*0.2]],
+        ]
+    
+    scored_word_list=[scored_word_list]*100
+    #print scored_word_list
+    svk2=ScoreWord2VecKeras( scored_word_list,iter=3)
+    #print( svk2.most_similar('a', topn=3))
+    #svk1.save('tmp.vec')
+    svk2.save_word2vec_format('tmp2.vec')
 
-
+    from ScoreSent2Vec.word2vec import ScoredSent2Vec,Sent2Vec,LineSentence
+    #print list(LineSentence(input_file))
+    sv1=Sent2Vec(LineSentence(input_file),model_file='tmp.model')
     
