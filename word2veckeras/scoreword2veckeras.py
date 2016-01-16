@@ -78,9 +78,11 @@ def train_batch_score_sg(model, scored_word_sentences, alpha=None, work=None,bat
                             train_x1[batch_count]=x1
                             train_y0[batch_count]=y0
                             train_y1[batch_count]=y1
+                            #print train_x0,train_y1,
                             batch_count += 1
-                            
                             if batch_count >= batch_size :
+                                #print { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y0),'score':np.array(train_y1)}
+                                #yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y0),'score':np.array(train_y1,dtype=float32)}
                                 yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y0),'score':np.array(train_y1)}
                                 batch_count=0
 
@@ -155,7 +157,7 @@ def build_keras_model_score_word_cbow(index_size,vector_size,vocab_size,code_dim
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     
     kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')    
-    kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='average',input='embedding')
+    kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
     kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='average')
     kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
 
@@ -182,15 +184,15 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
         super(ScoreWord2VecKeras, self).scan_vocab(sentences, progress_per, trim_rule)
 
         score_vec0=scored_word2score(scored_word_sentences2.next())
-        self.score_vector_size=len(score_vec0)
+        self.score_vector_size=len(score_vec0[1])
         
 
-    def train(self, scored_word_sentences, total_words=None, word_count=0, chunksize=100, total_examples=None, queue_factor=2, report_delay=1):
+    def train(self, scored_word_sentences, total_words=None, word_count=0, chunksize=800, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab) 
         #print 'ScoreWord2VecKeras.train'
 
         #batch_size=800 ##optimized 1G mem video card
-        batch_size=800
+        batch_size=chunksize
         samples_per_epoch=int(self.window*2*sum(map(len,scored_word_sentences)))
         #print 'samples_per_epoch',samples_per_epoch
         if self.sg:
@@ -202,14 +204,20 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
             self.kerasmodel=build_keras_model_score_word_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,score_vector_size=self.score_vector_size,model=self)
-
-            #print(train_batch_score_cbow(self, scored_word_sentences, None, work=None,batch_size=batch_size).next())
+            # print self.score_vector_size
+            # #print(train_batch_score_cbow(self, scored_word_sentences, None, work=None,batch_size=batch_size).next())
             # count=0
             # for w in train_batch_score_cbow(self, scored_word_sentences, None, work=None,batch_size=batch_size):
-            #     print w
+            #     for e in w:
+            #         if len(w[e]) != batch_size:
+            #             print '----'
+            #             print len(w[e]),batch_size
+            #             print w
+            #     #print w
             #     count +=1
-            #     if count > 10000 :
+            #     if count > 1000 :
             #         break
+            # print 'exit'
                 
             # sys.exit()
             
@@ -265,8 +273,8 @@ if __name__ == "__main__":
     svk=ScoreWord2VecKeras(sws)
     print( svk.most_similar('the', topn=5))
     #svk=ScoreWord2VecKeras( LineScoredWordSentence(input_file,dummy_score_vec),iter=100)
-    svk.save_word2vec_format('tmp.vec')
-    svk.save('tmp.model')
+    #svk.save_word2vec_format('tmp.vec')
+    #svk.save('tmp.model')
 
     #svck = ScoreWord2VecKeras(LineScoredWordSentence(input_file,dummy_score_vec),size=3,iter=1,sg=0)
     svck  = ScoreWord2VecKeras(LineScoredWordSentence(input_file,dummy_score_vec),iter=1,sg=0)
@@ -289,12 +297,12 @@ if __name__ == "__main__":
     
     scored_word_list=[scored_word_list]*100
     #print scored_word_list
-    svk2=ScoreWord2VecKeras( scored_word_list,iter=3)
-    print( svk2.most_similar('a', topn=3))
+    svk2=ScoreWord2VecKeras(scored_word_list,iter=3)
+    print(svk2.most_similar('a',topn=3))
     #svk1.save('tmp.vec')
-    svk2.save_word2vec_format('tmp2.vec')
+    #svk2.save_word2vec_format('tmp2.vec')
 
-    from ScoreSent2Vec.word2vec import ScoredSent2Vec,Sent2Vec,LineSentence
-    #print list(LineSentence(input_file))
-    sv1=Sent2Vec(LineSentence(input_file),model_file='tmp.model')
+    # from ScoreSent2Vec.word2vec import ScoredSent2Vec,Sent2Vec,LineSentence
+    # #print list(LineSentence(input_file))
+    # sv1=Sent2Vec(LineSentence(input_file),model_file='tmp.model')
     
