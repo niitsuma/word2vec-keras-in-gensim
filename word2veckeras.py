@@ -79,7 +79,7 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
 
         x1[word_indices]=1
         y[word_indices]=model.neg_labels
-
+        return x0,x1,y ##missed in develop branch
         
         
 
@@ -263,35 +263,35 @@ if __name__ == "__main__":
 
     input_file = 'test.txt'
 
-    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
-    # vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
-    # print( vsk.most_similar('the', topn=5))
-    # print( vs.most_similar('the', topn=5))
+    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
+    vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
+    print( vsk.most_similar('the', topn=5))
+    print( vs.most_similar('the', topn=5))
 
-    # vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
-    # vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
-    # print( vsnk.most_similar('the', topn=5))
-    # print( vsn.most_similar('the', topn=5))
+    vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
+    vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
+    print( vsnk.most_similar('the', topn=5))
+    print( vsn.most_similar('the', topn=5))
 
     
-    # #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
-    # vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
-    # vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
-    # print( vck.most_similar('the', topn=5))
-    # print( vc.most_similar('the', topn=5))
+    #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
+    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
+    vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
+    print( vck.most_similar('the', topn=5))
+    print( vc.most_similar('the', topn=5))
 
-    # vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100,sg=0,negative=5)
-    # vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
-    # print( vcnk.most_similar('the', topn=5))
-    # print( vcn.most_similar('the', topn=5))
+    vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,negative=5)
+    vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
+    print( vcnk.most_similar('the', topn=5))
+    print( vcn.most_similar('the', topn=5))
 
     from nltk.corpus import brown #, movie_reviews, treebank
-    # print(brown.sents()[0])
+    print(brown.sents()[0])
     
-    # br = gensim.models.word2vec.Word2Vec(brown.sents())
-    # brk = Word2VecKeras(brown.sents(),iter=3)
-    # print( brk.most_similar('the', topn=5))
-    # print( br.most_similar('the', topn=5))
+    br = gensim.models.word2vec.Word2Vec(brown.sents())
+    brk = Word2VecKeras(brown.sents(),iter=3)
+    print( brk.most_similar('the', topn=5))
+    print( br.most_similar('the', topn=5))
 
     brc = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0)
     brck = Word2VecKeras(brown.sents(),iter=3,sg=0)
@@ -299,12 +299,12 @@ if __name__ == "__main__":
     print( brc.most_similar('the', topn=5))
 
     
-    # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
-    # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
-    # print( brnk.most_similar('the', topn=5))
-    # print( brn.most_similar('the', topn=5))
+    brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
+    brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
+    print( brnk.most_similar('the', topn=5))
+    print( brn.most_similar('the', topn=5))
 
-    # brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
-    # brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
-    # print( brcnk.most_similar('the', topn=5))
-    # print( brcn.most_similar('the', topn=5))
+    brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
+    brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
+    print( brcnk.most_similar('the', topn=5))
+    print( brcn.most_similar('the', topn=5))
