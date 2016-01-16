@@ -367,11 +367,6 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
             
         self.alpha = w2v.alpha 
         
-        if w2v.hs:
-            self.syn1=w2v.syn1
-        else:
-            self.syn1neg=w2v.syn1neg
-            self.cum_table=w2v.cum_table
 
         self.layer1_size= w2v.layer1_size
         self.vector_size=w2v.vector_size
@@ -382,7 +377,15 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
         self.index2word=w2v.index2word
         self.max_vocab_size = w2v.max_vocab_size
         self.build_vocab(docs)
+       
         self.syn0=w2v.syn0
+        
+        if w2v.hs:
+            self.syn1=w2v.syn1
+        else:
+            self.syn1neg=w2v.syn1neg
+            self.cum_table=w2v.cum_table
+            
         self.train(docs,**kwargs)
         #self.train(docs,learn_words=learn_words,**kwargs)
         
