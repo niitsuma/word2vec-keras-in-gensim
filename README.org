@@ -1,15 +1,20 @@
 * word2vec-keras-in-gensim
 
-Just overwrite train function in gensim.models.word2vec.Word2Vec
+Just rewrite train function in gensim.models.word2vec.Word2Vec and gensim.models.doc2vec.Doc2Vec using Keras+Theano
+
+like
 
 #+BEGIN_SRC python
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
      def train(...
 #+END_SRC
 
-Except train, other member functions are same to the original gensim.
-The train function is implemented using keras and theano.
-keras enables GPU train.
+And can use GPU via Theano. 
+
+* Install
+#+BEGIN_SRC bash
+pip install word2veckeras
+#+END_SRC
 
 * Usage
 
