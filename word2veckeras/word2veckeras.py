@@ -236,11 +236,6 @@ if __name__ == "__main__":
     vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
     print( vsk.most_similar('the', topn=5))
     print( vs.most_similar('the', topn=5))
-
-    vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
-    vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
-    print( vsnk.most_similar('the', topn=5))
-    print( vsn.most_similar('the', topn=5))
     
     #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
     vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
@@ -248,6 +243,11 @@ if __name__ == "__main__":
     print( vck.most_similar('the', topn=5))
     print( vc.most_similar('the', topn=5))
 
+    vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
+    vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
+    print( vsnk.most_similar('the', topn=5))
+    print( vsn.most_similar('the', topn=5))
+    
     vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,negative=5)
     vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
     print( vcnk.most_similar('the', topn=5))
@@ -256,7 +256,7 @@ if __name__ == "__main__":
 
     #sys.exit()
     
-    from nltk.corpus import brown 
+    from nltk.corpus import brown #, movie_reviews, treebank
     print(brown.sents()[0])
     
     br = gensim.models.word2vec.Word2Vec(brown.sents())
