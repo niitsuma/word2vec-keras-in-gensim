@@ -278,7 +278,7 @@ if __name__ == "__main__":
     scored_word_list=[scored_word_list]*100
     #print scored_word_list
     svk2=ScoreWord2VecKeras(scored_word_list,iter=3)
-    print(svk2.most_similar('a',topn=3))
+    print(svk2.most_similar('a',topn=5))
     #svk1.save('tmp.vec')
     #svk2.save_word2vec_format('tmp2.vec')
 
