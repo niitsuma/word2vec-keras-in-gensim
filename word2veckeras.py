@@ -3,6 +3,9 @@
 
 # Licensed under the GNU Affero General Public License, version 3 - http://www.gnu.org/licenses/agpl-3.0.html
 
+
+from Queue import Queue
+
 from numpy import zeros, random, sum as np_sum, add as np_add, concatenate, \
     repeat as np_repeat, array, float32 as REAL, empty, ones, memmap as np_memmap, \
     sqrt, newaxis, ndarray, dot, vstack, dtype, divide as np_divide
@@ -24,8 +27,23 @@ from keras.utils.np_utils import accuracy
 from keras.models import Graph,Sequential
 from keras.layers.core import Dense, Dropout, Activation, Merge, Flatten , Lambda
 from keras.layers.embeddings import Embedding
-from keras.optimizers import SGD
+#from keras.optimizers import SGD
 from keras.objectives import mse
+
+
+def queue_to_list(q,extract_size):
+    """ Dump a Queue to a list """
+    # A new list
+    l = []
+    count=0
+    while q.qsize() > 0:
+        count +=1
+        if count >extract_size:
+            break
+        l.append(q.get())
+
+    return l
+
 
 
 def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_hidden=True,
@@ -48,7 +66,22 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
         return x0,x1,y
         #return (np.array([[x0]]),np.array([x1]),np.array([y]))
 
-    # if model.negative:
+    if model.negative:
+        x0=context_index
+        y=np.zeros((len(model.vocab)), dtype=REAL)
+        x1=np.zeros((len(model.vocab)), dtype=REAL)
+        
+        word_indices = [predict_word.index]
+        while len(word_indices) < model.negative + 1:
+            w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
+            if w != predict_word.index:
+                word_indices.append(w)
+
+        x1[word_indices]=1
+        y[word_indices]=model.neg_labels
+
+        
+        
 
 def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     
@@ -83,7 +116,7 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                                 yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
                                 batch_count=0
 
-def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,model=None):
+def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,learn_vectors=True,learn_hidden=True,model=None):
     #vocab_size=len(model.vocab)
     ## #index_size=vocab_size
     #index_size=len(self.docvecs) 
@@ -101,8 +134,9 @@ def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,model=None):
     kerasmodel.compile('rmsprop', {'code':'mse'})
     return kerasmodel
 
-  
-def train_cbow_pair(model, word, input_word_indices, l1, alpha, learn_vectors=True, learn_hidden=True):
+
+
+def train_cbow_pair(model, word, input_word_indices, l=None, alpha=None, learn_vectors=True, learn_hidden=True):
     
     if model.hs:
         x0=input_word_indices
@@ -111,11 +145,23 @@ def train_cbow_pair(model, word, input_word_indices, l1, alpha, learn_vectors=Tr
         y=np.zeros((len(model.vocab)), dtype=REAL)
         y[word.point]=word.code
         return x0,x1,y
-    #if model.negative:
+    
+    if model.negative:
+        word_indices = [word.index]
+        while len(word_indices) < model.negative + 1:
+            w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
+            if w != word.index:
+                word_indices.append(w)
+        x0=input_word_indices
+        x1=np.zeros((len(model.vocab)), dtype=REAL)
+        x1[word_indices]=1
+        y=np.zeros((len(model.vocab)), dtype=REAL)
+        y[word_indices]=model.neg_labels
+        return x0,x1,y
+        
 
-def train_batch_cbow(model, sentences, alpha, work=None, neu1=None,batch_size=100):
 
-    xy_list=[]
+def train_batch_cbow_xy_generator(model, sentences):
     for sentence in sentences:
         word_vocabs = [model.vocab[w] for w in sentence if w in model.vocab and  model.vocab[w].sample_int > model.random.rand() * 2**32]
         for pos, word in enumerate(word_vocabs):
@@ -123,46 +169,38 @@ def train_batch_cbow(model, sentences, alpha, work=None, neu1=None,batch_size=10
             start = max(0, pos - model.window + reduced_window)
             window_pos = enumerate(word_vocabs[start:(pos + model.window + 1 - reduced_window)], start)
             word2_indices = [word2.index for pos2, word2 in window_pos if (word2 is not None and pos2 != pos)]
-            xy=train_cbow_pair(model, word , word2_indices , None, alpha)
+            xy=train_cbow_pair(model, word , word2_indices , None, None)
             if xy !=None:
-                xy_list.append(xy)
-                
-    w_len_dict_org={i:len(v[0]) for i,v in enumerate(xy_list)}
-    #w_len_dict_org={0:3,1:2,2:3,3:4,4:3,5:2,6:3}
-    #w_len_dict_org={j:j % 5 for j in range(24)}
-    #print w_len_dict_org
+                yield xy
 
-    batch_count=0
-    train=[[],[],[]]
-    w_len_dict=copy.copy(w_len_dict_org)
+def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_size=100):
+    w_len_queue_dict={}
+    w_len_queue=[]
+
     while 1:
-        #print 'w_len_dict',w_len_dict 
-        if len(w_len_dict)==0:
-            if  batch_count>0:
-                yield { 'index':np.array(train[0]), 'point':np.array(train[1]), 'code':np.array(train[2])}
-            batch_count=0
-            train=[[],[],[]]
-            w_len_dict=copy.copy(w_len_dict_org)
-        w_len=w_len_dict[w_len_dict.keys()[0]]
-        w_len_dict_select= {k: v for k, v in w_len_dict.iteritems() if v==w_len}
-        w_len_dict       = {k: v for k, v in w_len_dict.iteritems() if v!=w_len}
-        for j in w_len_dict_select:
-            xy=xy_list[j]
-            if xy !=None:
-                for k in range(3): 
-                    train[k].append(xy[k])
-                batch_count += 1
-                if batch_count >= batch_size :
-                    yield { 'index':np.array(train[0]), 'point':np.array(train[1]), 'code':np.array(train[2])}
-                    batch_count=0
-                    train=[[],[],[]]
-        if  batch_count>0:
-            yield { 'index':np.array(train[0]), 'point':np.array(train[1]), 'code':np.array(train[2])}
-
-        batch_count=0
-        train=[[],[],[]]
-        
-
+        for xy in train_batch_cbow_xy_generator(model, sentences):
+            if xy != None:
+                w_len=len(xy[0])
+                if w_len>0:
+                    if w_len not in w_len_queue_dict:
+                        w_len_queue_dict[w_len]=Queue()
+                        w_len_queue.append(w_len)
+                    w_len_queue_dict[w_len].put(xy)
+            for w_len in w_len_queue:
+                #print w_len,w_len_queue_dict[w_len]._qsize()
+                if w_len_queue_dict[w_len].qsize() >= batch_size :
+                    #print w_len_queue_dict[w_len]
+                    l=queue_to_list(w_len_queue_dict[w_len],batch_size)
+                    #train=zip(l)
+                    #print [w_len,len(l),[[wl,w_len_queue_dict[wl].qsize()] for wl in w_len_queue ]]
+                    train=[[e[i] for e in l] for i in range(3)]
+                    yield { 'index':np.array(train[0]),
+                            'point':np.array(train[1]),
+                            'code':np.array(train[2])}
+                    #w_len_queue_dict.pop(w_len,None)
+                    #w_len_queue=w_len_queue[1:]+[w_len_queue[0]]
+                    #print w_len_queue
+    
 
         
 def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None):
@@ -194,6 +232,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
         batch_size=800
+        #batch_size=3200
         samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
         #print 'samples_per_epoch',samples_per_epoch
         if self.sg:
@@ -202,6 +241,18 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
             self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
+
+            #print(train_batch_cbow(self, sentences, None, work=None,batch_size=batch_size).next())
+
+            # count=0
+            # for w in train_batch_cbow(self, sentences, None, work=None,batch_size=batch_size):
+            #     print w
+            #     count +=1
+            #     if count > 10000 :
+            #         break
+                
+            # sys.exit()
+                
             self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
 
@@ -212,24 +263,48 @@ if __name__ == "__main__":
 
     input_file = 'test.txt'
 
-    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100)
-    vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
-    print( vsk.most_similar('the', topn=8))
-    print( vs.most_similar('the', topn=8))
+    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
+    # vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
+    # print( vsk.most_similar('the', topn=5))
+    # print( vs.most_similar('the', topn=5))
 
-    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100,sg=0)
-    vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
-    print( vck.most_similar('the', topn=8))
-    print( vc.most_similar('the', topn=8))
-
-
-    from nltk.corpus import brown, movie_reviews, treebank
-    print(brown.sents()[0])
-    
-    br = gensim.models.word2vec.Word2Vec(brown.sents())
-    brk = Word2VecKeras(brown.sents(),iter=10)
-
-    print( brk.most_similar('the', topn=8))
-    print( br.most_similar('the', topn=8))
+    # vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
+    # vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
+    # print( vsnk.most_similar('the', topn=5))
+    # print( vsn.most_similar('the', topn=5))
 
     
+    # #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
+    # vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
+    # vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
+    # print( vck.most_similar('the', topn=5))
+    # print( vc.most_similar('the', topn=5))
+
+    # vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100,sg=0,negative=5)
+    # vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
+    # print( vcnk.most_similar('the', topn=5))
+    # print( vcn.most_similar('the', topn=5))
+
+    from nltk.corpus import brown #, movie_reviews, treebank
+    # print(brown.sents()[0])
+    
+    # br = gensim.models.word2vec.Word2Vec(brown.sents())
+    # brk = Word2VecKeras(brown.sents(),iter=3)
+    # print( brk.most_similar('the', topn=5))
+    # print( br.most_similar('the', topn=5))
+
+    brc = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0)
+    brck = Word2VecKeras(brown.sents(),iter=3,sg=0)
+    print( brck.most_similar('the', topn=5))
+    print( brc.most_similar('the', topn=5))
+
+    
+    # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
+    # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
+    # print( brnk.most_similar('the', topn=5))
+    # print( brn.most_similar('the', topn=5))
+
+    # brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
+    # brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
+    # print( brcnk.most_similar('the', topn=5))
+    # print( brcn.most_similar('the', topn=5))
