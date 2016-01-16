@@ -56,15 +56,11 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
     if model.hs:
         y=np.zeros((len(model.vocab)), dtype=REAL)
         x1=np.zeros((len(model.vocab)), dtype=REAL)
-        # for k,i in enumerate(predict_word.code):
-        #     y[predict_word.point[k]]=i
-        #     x1[predict_word.point[k]]=1
         x1[predict_word.point]=1
         y[predict_word.point]=predict_word.code
         x0=context_index
         #x1=predict_word.index
         return x0,x1,y
-        #return (np.array([[x0]]),np.array([x1]),np.array([y]))
 
     if model.negative:
         x0=context_index
@@ -79,9 +75,7 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
 
         x1[word_indices]=1
         y[word_indices]=model.neg_labels
-
-        
-        
+        return x0,x1,y ##missed in develop branch
 
 def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     
@@ -117,11 +111,6 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                                 batch_count=0
 
 def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,learn_vectors=True,learn_hidden=True,model=None):
-    #vocab_size=len(model.vocab)
-    ## #index_size=vocab_size
-    #index_size=len(self.docvecs) 
-    #code_dim=vocab_size
-    #vector_size=model.vector_size
 
     kerasmodel = Graph()
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
@@ -191,28 +180,19 @@ def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_si
                 if w_len_queue_dict[w_len].qsize() >= batch_size :
                     #print w_len_queue_dict[w_len]
                     l=queue_to_list(w_len_queue_dict[w_len],batch_size)
-                    #train=zip(l)
-                    #print [w_len,len(l),[[wl,w_len_queue_dict[wl].qsize()] for wl in w_len_queue ]]
+                    #train=zip(*l)
                     train=[[e[i] for e in l] for i in range(3)]
                     yield { 'index':np.array(train[0]),
                             'point':np.array(train[1]),
                             'code':np.array(train[2])}
-                    #w_len_queue_dict.pop(w_len,None)
-                    #w_len_queue=w_len_queue[1:]+[w_len_queue[0]]
-                    #print w_len_queue
+
     
 
         
 def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None):
-    #vocab_size=len(model.vocab)
-    ## #index_size=vocab_size
-    #index_size=len(self.docvecs) 
-    #code_dim=vocab_size
-    #vector_size=model.vector_size
-
+ 
     kerasmodel = Graph()
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
-    #kerasmodel.add_input(name='index' ,  dtype=int)
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
 
@@ -241,18 +221,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
             self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
-
-            #print(train_batch_cbow(self, sentences, None, work=None,batch_size=batch_size).next())
-
-            # count=0
-            # for w in train_batch_cbow(self, sentences, None, work=None,batch_size=batch_size):
-            #     print w
-            #     count +=1
-            #     if count > 10000 :
-            #         break
-                
-            # sys.exit()
-                
+               
             self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
 
@@ -263,48 +232,49 @@ if __name__ == "__main__":
 
     input_file = 'test.txt'
 
-    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
-    # vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
-    # print( vsk.most_similar('the', topn=5))
-    # print( vs.most_similar('the', topn=5))
+    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
+    vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
+    print( vsk.most_similar('the', topn=5))
+    print( vs.most_similar('the', topn=5))
 
-    # vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
-    # vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
-    # print( vsnk.most_similar('the', topn=5))
-    # print( vsn.most_similar('the', topn=5))
-
+    vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
+    vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
+    print( vsnk.most_similar('the', topn=5))
+    print( vsn.most_similar('the', topn=5))
     
-    # #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
-    # vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
-    # vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
-    # print( vck.most_similar('the', topn=5))
-    # print( vc.most_similar('the', topn=5))
+    #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
+    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
+    vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
+    print( vck.most_similar('the', topn=5))
+    print( vc.most_similar('the', topn=5))
 
-    # vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=100,sg=0,negative=5)
-    # vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
-    # print( vcnk.most_similar('the', topn=5))
-    # print( vcn.most_similar('the', topn=5))
+    vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,negative=5)
+    vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
+    print( vcnk.most_similar('the', topn=5))
+    print( vcn.most_similar('the', topn=5))
 
-    from nltk.corpus import brown #, movie_reviews, treebank
-    # print(brown.sents()[0])
+
+    #sys.exit()
     
-    # br = gensim.models.word2vec.Word2Vec(brown.sents())
-    # brk = Word2VecKeras(brown.sents(),iter=3)
-    # print( brk.most_similar('the', topn=5))
-    # print( br.most_similar('the', topn=5))
+    from nltk.corpus import brown 
+    print(brown.sents()[0])
+    
+    br = gensim.models.word2vec.Word2Vec(brown.sents())
+    brk = Word2VecKeras(brown.sents(),iter=3)
+    print( brk.most_similar('the', topn=5))
+    print( br.most_similar('the', topn=5))
 
     brc = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0)
     brck = Word2VecKeras(brown.sents(),iter=3,sg=0)
     print( brck.most_similar('the', topn=5))
     print( brc.most_similar('the', topn=5))
-
     
-    # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
-    # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
-    # print( brnk.most_similar('the', topn=5))
-    # print( brn.most_similar('the', topn=5))
+    brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
+    brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
+    print( brnk.most_similar('the', topn=5))
+    print( brn.most_similar('the', topn=5))
 
-    # brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
-    # brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
-    # print( brcnk.most_similar('the', topn=5))
-    # print( brcn.most_similar('the', topn=5))
+    brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
+    brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
+    print( brcnk.most_similar('the', topn=5))
+    print( brcn.most_similar('the', topn=5))

@@ -142,23 +142,13 @@ def train_document_dm_concat_xy_generator(model, docs):
 def train_document_dm_concat(model, docs,batch_size=100):
     batch_count=0
     train_t=[0]*batch_size
-    #train=[[[0]]*batch_size]*4
-    #print train_t
-    # train_x1=[[0]]*batch_size
-    # train_y=[[0]]*batch_size
+
     while 1:
         for xy in train_document_dm_concat_xy_generator(model,docs):
             train_t[batch_count]=xy
-            # for i in range(4):
-            #     print xy[i]
-            #     train[i][batch_count]=xy[i]
-            #print xy,batch_count
-            #print train_t
             batch_count += 1
             if batch_count >= batch_size :
-                #print '---'
                 train=[[train_t[j][i] for j in range(batch_size) ] for i in range(4)]
-                #print train
                 yield {'iword':np.array(train[0]),
                            'index':np.array(train[1]),
                             'point':np.array(train[2]),
@@ -166,12 +156,6 @@ def train_document_dm_concat(model, docs,batch_size=100):
                 batch_count=0
                       
 def build_keras_model_dbow(index_size,vector_size,vocab_size,code_dim,model=None):
-    # vocab_size=len(vocab)
-    # #index_size=vocab_size
-    # index_size=len(docvecs)
-    # code_dim=vocab_size
-    # #print 'build_keras_model',vocab_size, index_size, code_dim
-
     kerasmodel = Graph()
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
@@ -188,28 +172,7 @@ def build_keras_model_dbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 
 def build_keras_model_dm(index_size,vector_size,vocab_size,code_dim,learn_doctags=True, learn_words=True, learn_hidden=True, model=None ,word_vectors=None,doctag_vectors=None):
-    #print 'build_keras_model_dm',index_size,vector_size,vocab_size,code_dim
-    #vocab_size=len(model.vocab)
-    ## #index_size=vocab_size
-    #index_size=len(self.docvecs) 
-    #code_dim=vocab_size
-    #vector_size=model.vector_size
-
-    # index_size=2
-    # vocab_size=3
-    # vector_size=2
-    # code_dim=2
-    # maxlen=1
-
-    # # learn_doctags=False
-    # # learn_words=False
-    # # learn_hidden=False
-
-    # learn_doctags=True
-    # learn_words=True
-    # learn_hidden=True
-
-    
+ 
     kerasmodel = Graph()
 
     kerasmodel.add_input(name='iword' , input_shape=(1,), dtype=int)
@@ -264,19 +227,6 @@ def build_keras_model_dm(index_size,vector_size,vocab_size,code_dim,learn_doctag
     
     
 def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,learn_doctags=True, learn_words=True, learn_hidden=True, model=None ,word_vectors=None,doctag_vectors=None):
-    # index_size=2
-    # vocab_size=3
-    # vector_size=2
-    # code_dim=2
-    # maxlen=1
-
-    # learn_doctags=False
-    # learn_words=False
-    # learn_hidden=False
-
-    # learn_doctags=True
-    # learn_words=True
-    # learn_hidden=True
 
     kerasmodel = Graph()
 
@@ -350,65 +300,29 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
 
         batch_size=800 ##optimized 1G mem video card
         #batch_size=3200
-        batch_size=3
+        #batch_size=3
         samples_per_epoch=int(self.window*2*sum(map(len,docs)))
         #print 'samples_per_epoch',samples_per_epoch
         if self.sg:
-            #print'Doc2VecKeras',self.sg
-            #self.build_keras_model()
             self.kerasmodel=build_keras_model_dbow(index_size=index_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
-            # gen=train_batch_dbow(self, docs, self.alpha, batch_size=batch_size)
-            # print gen
-            # for g in gen:
-            #     print g
-            # sys.exit()
             self.kerasmodel.fit_generator(
                 train_batch_dbow(self, docs, self.alpha, batch_size=batch_size),
                 samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
 
             self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
            
-             #self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
-        # elif self.dm_concat:
-        #     tally += train_document_dm_concat(self, doc.words, doctag_indexes, alpha, work, neu1,
-        #                                           doctag_vectors=doctag_vectors, doctag_locks=doctag_locks)
         else:
             if self.dm_concat:
                 self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size, model=self)
-                
-                # count=0
-                # #for w in train_document_dm_concat_xy_generator(self, docs):
-                # for w in train_document_dm_concat(self, docs,batch_size):
-                #     print w
-                #     count +=1
-                #     if count > 1 :
-                #         break
-
-                # sys.exit()
-
                 self.kerasmodel.fit_generator(
                     train_document_dm_concat(self, docs, batch_size=batch_size),
                     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
-
-                #tally += train_document_dm(self, doc.words, doctag_indexes, alpha, work, neu1,
                 self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
                 
             else:
-                #print'Doc2VecKeras',self.sg
-
                 self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,vocab_size, model=self)
 
-                # count=0
-                # for w in train_batch_dm(self, docs,batch_size):
-                #     print w
-                #     count +=1
-                #     if count > 2 :
-                #         break
-
-                # sys.exit()
-
-                # sys.exit()
                 self.kerasmodel.fit_generator(
                     train_batch_dm(self, docs, batch_size=batch_size),
                     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
@@ -442,58 +356,51 @@ class LabeledListSentence(object):
 
 if __name__ == "__main__":
     
-    #kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,code_dim=2)
-    #kerasmodel=build_keras_model_dm_concat(index_size=2,vector_size=2,vocab_size=3,code_dim=2)
-    #print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] )  })
-    #sys.exit()
     
     input_file = 'test.txt'
     doc1=gensim.models.doc2vec.TaggedLineDocument(input_file)
     
-    # #print len(d1.docvecs)
     
-    ###debug print
-    # print doc1
-    # for d in doc1:
-    #     print d
-    #print doc1.tags
-    #print d1.docvecs[0]
+    dvdbowk1=Doc2VecKeras(doc1,size=10,dm=0,iter=3)    
+    print(dvdbowk1.docvecs.most_similar(0))
+    dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=0)
+    print(dvdbow1.docvecs.most_similar(0))
+    print dvdbowk1.docvecs[0]
+    print dvdbow1.docvecs[0]
     
-    # dvdbowk1=Doc2VecKeras(doc1,size=10,dm=0,iter=3)    
-    # print(dvdbowk1.docvecs.most_similar(0))
-    # dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=0)
-    # print(dvdbow1.docvecs.most_similar(0))
-    # print dvdbowk1.docvecs[0]
-    # print dvdbow1.docvecs[0]
-    
-    # # sys.exit()
-    
-    # dvdmk1=Doc2VecKeras(doc1,size=10,dm=1)
-    # dvdm1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=1,iter=3)
-    # print(dvdmk1.docvecs.most_similar(0))
-    # print(dvdm1.docvecs.most_similar(0))
 
+    dvdmk1=Doc2VecKeras(doc1,size=10,dm=1)
+    dvdm1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=1,iter=3)
+    print(dvdmk1.docvecs.most_similar(0))
+    print(dvdm1.docvecs.most_similar(0))
 
-    dvdmk1=Doc2VecKeras(doc1,size=5,dm=1,dm_concat=1,window=3)
+    dvdm1=gensim.models.doc2vec.Doc2Vec(doc1,dm=1,dm_concat=1,iter=3)
+    dvdmck1=Doc2VecKeras(doc1,dm=1,dm_concat=1,window=3)
 
-    sys.exit()
+    #sys.exit()
 
     
 
     
-    from nltk.corpus import brown #, movie_reviews, treebank
+    from nltk.corpus import brown 
     # print(brown.sents()[0])
 
     dvb=gensim.models.doc2vec.Doc2Vec(LabeledListSentence(brown.sents()),dm=0)
     print(dvb.docvecs.most_similar(0))
-    dvbk=Doc2VecKeras(LabeledListSentence(brown.sents()),dm=0)
+    dvbk=Doc2VecKeras(LabeledListSentence(brown.sents()),dm=0,iter=3)
     print(dvbk.docvecs.most_similar(0))
     # br = gensim.models.word2vec.Word2Vec(brown.sents())
     # brk = Word2VecKeras(brown.sents(),iter=10)
 
     dvb=gensim.models.doc2vec.Doc2Vec(LabeledListSentence(brown.sents()),dm=1)
     print(dvb.docvecs.most_similar(0))
-    dvbk=Doc2VecKeras(LabeledListSentence(brown.sents()),dm=1)
+    dvbk=Doc2VecKeras(LabeledListSentence(brown.sents()),dm=1,iter=3)
+    print(dvbk.docvecs.most_similar(0))
+
+
+    dvb=gensim.models.doc2vec.Doc2Vec(LabeledListSentence(brown.sents()),dm=1,dm_concat=1)
+    print(dvb.docvecs.most_similar(0))
+    dvbk=Doc2VecKeras(LabeledListSentence(brown.sents()),dm=1,dm_concat=1,iter=3)
     print(dvbk.docvecs.most_similar(0))
 
 
