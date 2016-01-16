@@ -233,7 +233,7 @@ def build_keras_model_dm(index_size,vector_size,vocab_size,code_dim,learn_doctag
     return kerasmodel
     
     
-def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,learn_doctags=True, learn_words=True, learn_hidden=True, model=None ,word_vectors=None,doctag_vectors=None):
+def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,window_size,learn_doctags=True, learn_words=True, learn_hidden=True, model=None ,word_vectors=None,doctag_vectors=None):
 
     kerasmodel = Graph()
 
@@ -243,7 +243,7 @@ def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,learn
 
 
     embedword=Embedding(vocab_size, vector_size,
-                        input_length=2*model.window,
+                        input_length=2*window_size,
                         trainable=learn_words,
                         #weights=[np.array([[1,2],[3,4],[5,6]],'float32')]
                         weights=[model.syn0]
@@ -278,12 +278,12 @@ def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,learn
     if model.hs:
         hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
                      trainable=learn_hidden,
-                     weights=[model.syn1.T,np.zeros((code_dim))]
+                     #weights=[model.syn1.T,np.zeros((code_dim))]
                      )
     else:
         hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
                      trainable=learn_hidden,
-                     weights=[model.syn1neg.T,np.zeros((code_dim))]
+                     #weights=[model.syn1neg.T,np.zeros((code_dim))]
                      )
         
     
@@ -339,7 +339,8 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
            
         else:
             if self.dm_concat:
-                self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size, model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
+                print 'window',self.window
+                self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size,self.window, model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
                 self.kerasmodel.fit_generator(
                     train_document_dm_concat(self, docs, batch_size=batch_size),
                     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
