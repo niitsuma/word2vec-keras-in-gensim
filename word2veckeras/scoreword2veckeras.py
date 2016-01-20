@@ -234,7 +234,31 @@ class LineScoredWordSentence(object):
                         yield  [[w,self.score_fn(w)] for w in line[i : i + self.max_sentence_length]]
                         i += self.max_sentence_length
        
+class ScoredListSentence(object):
+    def __init__(self, words_list,score_fn):
+        """
+        words_list like:
+        words_list = [
+        ['human', 'interface', 'computer'],
+        ['survey', 'user', 'computer', 'system', 'response', 'time'],
+        ['eps', 'user', 'interface', 'system'],
+        ]
+        sentence = LabeledListSentence(words_list)
+        """
+        self.words_list = words_list
+        self.score_fn=score_fn
     
+    def __getitem__(self, index):
+        t = [t for t in self]
+        return t[index]
+    def __iter__(self):
+        for i, words in enumerate(self.words_list):
+            #yield LabeledSentence(words, ['SENT_{0}'.format(i)])
+            #yield gensim.models.doc2vec.TaggedDocument(words, [i])
+            yield  [[w,self.score_fn(w)] for w in words]
+
+
+                        
 
 if __name__ == "__main__":
 
