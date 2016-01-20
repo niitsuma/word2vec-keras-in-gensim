@@ -3,7 +3,7 @@ from setuptools import find_packages
 
 
 setup(name='word2veckeras',
-      version='0.0.2.1',
+      version='0.0.2.2',
       description='wordvec based Kearas gensim',
       author='Hirotaka Niitsuma',
       author_email='hirotaka.niitsuma@gmail.com',

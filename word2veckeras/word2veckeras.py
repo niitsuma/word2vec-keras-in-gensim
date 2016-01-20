@@ -211,10 +211,15 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
-        batch_size=800
+        #batch_size=800
+        batch_size=chunksize
         #batch_size=3200
         samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
         #print 'samples_per_epoch',samples_per_epoch
+
+        if self.hs and self.negative>0 :
+            raise ValueError("both using hs and negative not implemented") 
+        
         if self.sg:
             self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
@@ -243,38 +248,44 @@ if __name__ == "__main__":
     print( vck.most_similar('the', topn=5))
     print( vc.most_similar('the', topn=5))
 
-    vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,negative=5)
-    vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
-    print( vsnk.most_similar('the', topn=5))
-    print( vsn.most_similar('the', topn=5))
+
+    ## negative sampling has bug
     
-    vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,negative=5)
-    vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
-    print( vcnk.most_similar('the', topn=5))
-    print( vcn.most_similar('the', topn=5))
+    # vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,hs=0,negative=5)
+    # vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
+    # print( vsnk.most_similar('the', topn=5))
+    # print( vsn.most_similar('the', topn=5))
+    
+    # vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,hs=0,negative=5)
+    # vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
+    # print( vcnk.most_similar('the', topn=5))
+    # print( vcn.most_similar('the', topn=5))
 
 
     #sys.exit()
+
+    
     
     from nltk.corpus import brown #, movie_reviews, treebank
     print(brown.sents()[0])
+    brown_sents=list(brown.sents()[:400])
     
-    br = gensim.models.word2vec.Word2Vec(brown.sents())
-    brk = Word2VecKeras(brown.sents(),iter=3)
+    br = gensim.models.word2vec.Word2Vec(brown_sents)
+    brk = Word2VecKeras(brown_sents,iter=3)
     print( brk.most_similar('the', topn=5))
     print( br.most_similar('the', topn=5))
 
-    brc = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0)
-    brck = Word2VecKeras(brown.sents(),iter=3,sg=0)
+    brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=0)
+    brck = Word2VecKeras(brown_sents,iter=3,sg=0)
     print( brck.most_similar('the', topn=5))
     print( brc.most_similar('the', topn=5))
     
-    brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
-    brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
-    print( brnk.most_similar('the', topn=5))
-    print( brn.most_similar('the', topn=5))
+    # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
+    # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
+    # print( brnk.most_similar('the', topn=5))
+    # print( brn.most_similar('the', topn=5))
 
-    brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
-    brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
-    print( brcnk.most_similar('the', topn=5))
-    print( brcn.most_similar('the', topn=5))
+    # brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
+    # brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
+    # print( brcnk.most_similar('the', topn=5))
+    # print( brcn.most_similar('the', topn=5))
