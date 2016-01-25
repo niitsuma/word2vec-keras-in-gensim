@@ -3,6 +3,8 @@
 
 # Licensed under the GNU Affero General Public License, version 3 - http://www.gnu.org/licenses/agpl-3.0.html
 
+import math
+import copy
 from Queue import Queue
 
 from numpy import zeros, random, sum as np_sum, add as np_add, concatenate, \
@@ -27,7 +29,7 @@ from keras.utils.np_utils import accuracy
 from keras.models import Graph,Sequential
 from keras.layers.core import Dense, Dropout, Activation, Merge, Flatten, LambdaMerge,Lambda
 from keras.layers.embeddings import Embedding
-#from keras.optimizers import SGD
+from keras.optimizers import SGD
 from keras.objectives import mse
 
 from word2veckeras import train_sg_pair,train_cbow_pair,queue_to_list
@@ -172,54 +174,91 @@ def build_keras_model_dbow(index_size,vector_size,vocab_size,code_dim,learn_doct
     return kerasmodel
 
 
-def build_keras_model_dm(index_size,vector_size,vocab_size,code_dim,learn_doctags=True, learn_words=True, learn_hidden=True, model=None ,word_vectors=None,doctag_vectors=None):
+def build_keras_model_dm(index_size,vector_size,vocab_size,code_dim,
+                         learn_doctags=True, learn_words=True, learn_hidden=True,
+                         model=None ,
+                         word_vectors=None,doctag_vectors=None,hidden_vectors=None
+                         ):
  
     kerasmodel = Graph()
 
     kerasmodel.add_input(name='iword' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     
-    embedword=Embedding(vocab_size, vector_size,trainable=learn_words,
-                        #input_length=2,
-                        #weights=[np.array([[1,2],[3,4],[5,6]],'float32')]
-                        weights=[model.syn0]
-                        )
-    kerasmodel.add_node(
-        embedword,
-        name='embedword', input='iword')
-    kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='averageword',input='embedword')
-
-    embedindex=Embedding(index_size, vector_size,trainable=learn_doctags,
-                         #input_length=1,
-                         #weights=[np.array([[10,20],[30,40]],'float32')]
-                         weights=[model.docvecs.doctag_syn0]
-           )
-    kerasmodel.add_node(
-        embedindex,
-        name='embedindex', input='index')
-    kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='averageindex',input='embedindex')
-
-    ### This calcuation diffrent from original gensim. Because of this error https://github.com/fchollet/keras/issues/1474
-    kerasmodel.add_node(
-        Merge([kerasmodel.nodes['averageword'],kerasmodel.nodes['averageindex']], mode='sum')
-        #,output_shape=(vector_size,)
-        ,name='average'
-        #,name='sumembed'
-        )
-    if model.hs:
-        hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
-                     trainable=learn_hidden,
-                     weights=[model.syn1.T,np.zeros((code_dim))]
-                     )
+    # embedword=Embedding(vocab_size, vector_size,
+    #                     #trainable=learn_words,
+    #                     #input_length=2,
+    #                     #weights=[np.array([[1,2],[3,4],[5,6]],'float32')]
+    #                     weights=[model.syn0]
+    #                     )
+    #print word_vectors
+    if word_vectors is None :
+        kerasmodel.add_node(Embedding(vocab_size, vector_size,trainable=learn_words),name='embedword', input='iword')
     else:
-        hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
-                     trainable=learn_hidden,
-                     weights=[model.syn1neg.T,np.zeros((code_dim))]
-                     )
+        kerasmodel.add_node(Embedding(vocab_size, vector_size,trainable=learn_words,weights=[word_vectors]),name='embedword', input='iword')        
         
-    kerasmodel.add_node(
-        hidden
-        , name='sigmoid', input='average')
+        # Embedding(vocab_size, vector_size,
+        #           #weights=[model.syn0]
+        #           ),
+        # #embedword,
+        # name='embedword', input='iword')
+    kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='averageword',input='embedword')
+
+    # embedindex=Embedding(index_size, vector_size,
+    #                      #trainable=learn_doctags,
+    #                      #input_length=1,
+    #                      #weights=[np.array([[10,20],[30,40]],'float32')]
+    #                      #weights=[model.docvecs.doctag_syn0]
+    #        )
+    if doctag_vectors is None :
+        kerasmodel.add_node(Embedding(index_size, vector_size,trainable=learn_doctags),name='embedindex', input='index')
+    else:
+        kerasmodel.add_node(Embedding(index_size, vector_size,trainable=learn_doctags,weights=[doctag_vectors]),name='embedindex', input='index')
+
+        
+    
+        # #embedindex,
+        # Embedding(index_size, vector_size),
+        # name='embedindex', input='index')
+    kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='averageindex',input='embedindex')
+
+    # ### This calcuation diffrent from original gensim. Because of this error https://github.com/fchollet/keras/issues/1474
+    # kerasmodel.add_node(
+    #     Merge([kerasmodel.nodes['averageword'],kerasmodel.nodes['averageindex']], mode='sum')
+    #     #,output_shape=(vector_size,)
+    #     ,name='average'
+    #     #,name='sumembed'
+    #     )
+    #if model.hs:
+    # hidden=Dense(code_dim, activation='sigmoid',
+    #                  #b_constraint = keras.constraints.maxnorm(0),
+    #                  #trainable=learn_hidden,
+    #                  ,inputs=['averageindex','averageword'], merge_mode='sum'
+    #                  #weights=[model.syn1.T,np.zeros((code_dim))
+    #                  ]
+    #                  )
+    # else:
+    #     hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
+    #                  #trainable=learn_hidden,
+    #                  weights=[model.syn1neg.T,np.zeros((code_dim))]
+    #                  )
+
+    if hidden_vectors is None:
+        kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),trainable=learn_hidden), name='sigmoid',inputs=['averageindex','averageword'], merge_mode='sum')
+    else:
+        kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),trainable=learn_hidden,weights=[hidden_vectors,np.zeros((code_dim))]), name='sigmoid',inputs=['averageindex','averageword'], merge_mode='sum') 
+    # kerasmodel.add_node(
+    #     #hidden,
+    #     Dense(code_dim, activation='sigmoid',
+    #                  #b_constraint = keras.constraints.maxnorm(0),
+    #                  #trainable=learn_hidden,
+                    
+    #                  #weights=[model.syn1.T,np.zeros((code_dim))
+    #                  ),
+    #     name='sigmoid',
+    #     #input='average'
+    #     inputs=['averageindex','averageword'], merge_mode='sum'
+    #     )
 
 
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
@@ -263,7 +302,7 @@ def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,windo
                          input_length=1,
                          trainable=learn_doctags,
                          #weights=[np.array([[10,20],[30,40]],'float32')]
-                         weights=[model.docvecs.doctag_syn0]
+                         #weights=[model.docvecs.doctag_syn0]
                          )
     kerasmodel.add_node(
         # Embedding(index_size, vector_size,
@@ -317,29 +356,40 @@ def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,windo
         
 class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
 
-    def train(self, docs=None, chunksize=800,learn_doctags=True, learn_words=True, learn_hidden=True,iter=None):
+    def train(self, docs=None, batch_size=800,
+              learn_doctags=True, learn_words=True, learn_hidden=True,iter=None):
         #print 'Doc2VecKeras.train'
         if iter!=None:
             self.iter=iter
         if docs==None:
             docs=self.docvecs
-        print 'Doc2VecKeras.train sg=',self.sg
+        
         vocab_size=len(self.vocab)
         index_size=len(self.docvecs)
 
         #batch_size=800 ##optimized 1G mem video card
         #batch_size=3200
-        batch_size=chunksize
+        batch_size=batch_size
         samples_per_epoch=int(self.window*2*sum(map(len,docs)))
         #print 'samples_per_epoch',samples_per_epoch
+        
+        print 'Doc2VecKeras.train sg=',self.sg,learn_words,batch_size,samples_per_epoch/batch_size
+        
         if self.hs and self.negative>0 :
             raise ValueError("both using hs and negative not implemented") 
         
         if self.sg:
             self.kerasmodel=build_keras_model_dbow(index_size=index_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
+   
+            #dv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
+   
             self.kerasmodel.fit_generator(
                 train_batch_dbow(self, docs, self.alpha, batch_size=batch_size),
                 samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+
+            # print dv0
+            # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            # sys.exit() 
 
             self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
             if self.hs:
@@ -350,11 +400,23 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
             
         else:
             if self.dm_concat:
+                print 'dm_concat'
                 #print 'window',self.window
                 self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size,self.window, model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
+
+                # wv0=copy.copy(self.kerasmodel.nodes['embedword'].get_weights()[0][0])
+                # dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
+  
                 self.kerasmodel.fit_generator(
                     train_document_dm_concat(self, docs, batch_size=batch_size),
                     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+
+                # print wv0
+                # print self.kerasmodel.nodes['embedword'].get_weights()[0][0]
+                # print dv0
+                # print self.kerasmodel.nodes['embedindex'].get_weights()[0][0]
+                # sys.exit()
+                
                 self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
                 if self.hs:
@@ -364,11 +426,46 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
 
                 
             else:
-                self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,vocab_size, model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
-                self.kerasmodel.fit_generator(
-                    train_batch_dm(self, docs, batch_size=batch_size),
-                    samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+                print 'dm'
 
+                self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,vocab_size, model=self,
+                                                     learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden,
+                                                     word_vectors=self.syn0,
+                                                     doctag_vectors=self.docvecs.doctag_syn0,                                                     hidden_vectors=self.syn1.T
+                                                     )
+                #wv0=copy.copy(self.kerasmodel.nodes['embedword'].get_weights()[0][0])
+                #dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
+                
+                count =0
+                # gn=train_batch_dm(self, docs, batch_size=batch_size)
+                # count=0
+                # for g in gn:
+                #     print g
+                #     count +=1
+                #     if count >=2 :
+                #         sys.exit()
+
+                # print samples_per_epoch/batch_size
+                # sys.exit()
+                
+                for g in train_batch_dm(self, docs, batch_size=batch_size):
+                    self.kerasmodel.fit(g, nb_epoch=self.iter)
+                    count +=1
+                    if count > samples_per_epoch/batch_size :
+                        break
+                    
+                # self.kerasmodel.fit_generator(
+                #     train_batch_dm(self, docs, batch_size=batch_size),
+                #     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+
+                # print wv0
+                # print self.kerasmodel.nodes['embedword'].get_weights()[0][0]
+                # print dv0
+                # print self.kerasmodel.nodes['embedindex'].get_weights()[0][0]
+                # sys.exit()
+                
+
+                                
                 self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
                 if self.hs:
@@ -456,16 +553,59 @@ class LabeledListSentence(object):
             yield gensim.models.doc2vec.TaggedDocument(words, [i])
 
 
+def debug_fit():            
+    kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,code_dim=2,
+                                    word_vectors=np.array([[1,2],[3,4],[5,6]]),
+                                    doctag_vectors=np.array([[10,20],[30,40]]),
+                                    hidden_vectors=np.array([[1,-1],[-1,1]]),
+                                    learn_words=False
+                                    )
+    
+    #kerasmodel=build_keras_model_dm_concat(index_size=2,vector_size=2,vocab_size=3,code_dim=2)
+    print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] )  })
+    print 1.0/(1+math.exp(-(3+10-(4+20)) ))
+    def mygen():
+        while 1:
+            bach_size=2
+            # for i in range(2):
+            #     x0=np.array([[i]], "int32")
+            #     x1=np.array([[i]], "int32")
+            #     x2=np.array([numpy.random.random((2))])
+            #     y=np.array([numpy.random.random((2))])
+            #print x1,x2,y
+            #return 
+            yield {'index': np.random.randint(2, size=(bach_size, 1)),
+                       'iword': np.random.randint(3, size=(bach_size, 2)),
+                       'point': np.random.random((bach_size,2)),
+                       'code': np.random.random((bach_size,2))
+
+            }
+    g=mygen()
+    print g.next()
+    #sys.exit()
+    
+    #kerasmodel.fit_generator(mygen(),samples_per_epoch=100, nb_epoch=100)
+    kerasmodel.fit({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] ),'code':np.array([[1,1],[1,1]])  } )
+    print kerasmodel.nodes['embedword'].get_weights()
+    print kerasmodel.nodes['embedindex'].get_weights()
+    kerasmodel.fit({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] ),'code':np.array([[1,1],[1,1]])  } )
+    print kerasmodel.nodes['embedword'].get_weights()
+    print kerasmodel.nodes['embedindex'].get_weights()
+    sys.exit()
+    
 if __name__ == "__main__":
     
     input_file = 'test.txt'
     doc1=gensim.models.doc2vec.TaggedLineDocument(input_file)
-    #print doc1
+    # #print doc1
     
-    
-    dvdbowk1=Doc2VecKeras(doc1,size=10,dm=0,iter=3)    
+    dvdbowk1=Doc2VecKeras(doc1,size=10,dm=1,iter=3)
+    #dvdbowk1=Doc2VecKeras(doc1,size=10,dm=1,dm_concat=1,iter=3)
+    # dvdbowk1=Doc2VecKeras(doc1,size=10,dm=0,iter=100)
+    # sys.exit()
     print(dvdbowk1.docvecs.most_similar(0))
     dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=0)
+    #sys.exit()
     print(dvdbow1.docvecs.most_similar(0))
     print dvdbowk1.docvecs[0]
     print dvdbow1.docvecs[0]

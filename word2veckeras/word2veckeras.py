@@ -222,15 +222,25 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         
         if self.sg:
             self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
+            
+            #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            #print wv0
+            #print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            #sys.exit()
+            
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
             self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
-               
+
+            #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            #print wv0
+            #print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            #sys.exit()
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
 
-
+            
 
 
 if __name__ == "__main__":

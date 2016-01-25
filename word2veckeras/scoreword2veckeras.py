@@ -196,12 +196,27 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
         #print 'samples_per_epoch',samples_per_epoch
         if self.sg:
             self.kerasmodel  =build_keras_model_score_word_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,score_vector_size=self.score_vector_size,model=self)
+
+            #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
+            
             self.kerasmodel.fit_generator(train_batch_score_sg(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+
+            # print wv0
+            # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            # sys.exit()
+            
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
             self.kerasmodel=build_keras_model_score_word_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,score_vector_size=self.score_vector_size,model=self)
-           
+
+            #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
+            
             self.kerasmodel.fit_generator(train_batch_score_cbow(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+
+            # print wv0
+            # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            # sys.exit()
+
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
 
 
@@ -267,24 +282,44 @@ if __name__ == "__main__":
     
     input_file = 'test.txt'
 
+    n_iter=3
+    size=10
+    scales=[1.0,1.0,1.0]
+    
     def dummy_score_vec(word):
-        return [len(word),ord(word[0])]
+        return [len(word)*scales[0],ord(word[0])*scales[1],ord(word[-1])*scales[1]]
         #return [len(word)/0.2 ]
         
     sws=list(LineScoredWordSentence(input_file,dummy_score_vec))
     # print sws[0]
     
-    svk=ScoreWord2VecKeras(sws)
-    print( svk.most_similar('the', topn=5))
-    #svk=ScoreWord2VecKeras( LineScoredWordSentence(input_file,dummy_score_vec),iter=100)
+    #svk=ScoreWord2VecKeras(sws)
+    svk=ScoreWord2VecKeras( LineScoredWordSentence(input_file,dummy_score_vec),size=size,iter=n_iter,sg=0)
+    
     #svk.save_word2vec_format('tmp.vec')
     #svk.save('tmp.model')
 
+    from word2veckeras import Word2VecKeras
+    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=size,iter=n_iter)
+    #vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
+
+    print( svk.most_similar('the', topn=5))
+    print( vsk.most_similar('the', topn=5))
+    #print( vs.most_similar('the', topn=5))
+    print(svk['the'])
+    print(vsk['the'])
+    
+    sys.exit()
+        
     #svck = ScoreWord2VecKeras(LineScoredWordSentence(input_file,dummy_score_vec),size=3,iter=1,sg=0)
     svck  = ScoreWord2VecKeras(LineScoredWordSentence(input_file,dummy_score_vec),iter=1,sg=0)
     print( svck.most_similar('the', topn=5))
     #sys.exit()
     
+
+    
+
+
     
     #print svk.score_vector_size
     #model1=build_keras_model_score_word_sg(index_size=3,vector_size=2,vocab_size=2,code_dim=2,score_vector_size=2)
