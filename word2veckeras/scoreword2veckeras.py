@@ -146,7 +146,7 @@ def build_keras_model_score_word_sg(index_size,vector_size,vocab_size,code_dim,s
 
 
 
-def build_keras_model_score_word_cbow(index_size,vector_size,vocab_size,code_dim,score_vector_size,model=None):
+def build_keras_model_score_word_cbow(index_size,vector_size,vocab_size,code_dim,score_vector_size,model=None,cbow_mean=False):
 
     kerasmodel = Graph()
 
@@ -155,8 +155,11 @@ def build_keras_model_score_word_cbow(index_size,vector_size,vocab_size,code_dim
     
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     
-    kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')    
-    kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
+    kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')
+    if cbow_mean:
+        kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
+    else:
+        kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='average',input='embedding')
     kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='average')
     kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
 
@@ -207,7 +210,11 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
             
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
-            self.kerasmodel=build_keras_model_score_word_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,score_vector_size=self.score_vector_size,model=self)
+            self.kerasmodel=build_keras_model_score_word_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,
+                                                              score_vector_size=self.score_vector_size,
+                                                              model=self,
+                                                              cbow_mean=self.cbow_mean
+                                                              )
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             

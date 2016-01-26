@@ -189,15 +189,18 @@ def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_si
     
 
         
-def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None):
+def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None,cbow_mean=False):
  
     kerasmodel = Graph()
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
 
-    kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')    
-    kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='average',input='embedding')
+    kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')
+    if cbow_mean:
+        kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='average',input='embedding')
+    else:
+        kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='average',input='embedding')
     kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='average')
     kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
     kerasmodel.compile('rmsprop', {'code':'mse'}) 
@@ -231,7 +234,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             
             self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
         else:
-            self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
+            self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self,cbow_mean=self.cbow_mean)
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
