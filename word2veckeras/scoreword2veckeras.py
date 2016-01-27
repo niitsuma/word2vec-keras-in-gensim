@@ -202,7 +202,7 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             
-            self.kerasmodel.fit_generator(train_batch_score_sg(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            self.kerasmodel.fit_generator(train_batch_score_sg(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
 
             # print wv0
             # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
@@ -218,7 +218,7 @@ class  ScoreWord2VecKeras(gensim.models.word2vec.Word2Vec):
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             
-            self.kerasmodel.fit_generator(train_batch_score_cbow(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            self.kerasmodel.fit_generator(train_batch_score_cbow(self, scored_word_sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
 
             # print wv0
             # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]

@@ -198,7 +198,7 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
     kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')
     if cbow_mean:
-        kerasmodel.add_node(Lambda(lambda x:x.mean(-2),output_shape=(vector_size,)),name='average',input='embedding')
+        kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
     else:
         kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='average',input='embedding')
     kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='average')
@@ -210,12 +210,12 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
-     def train(self, sentences, total_words=None, word_count=0, chunksize=100, total_examples=None, queue_factor=2, report_delay=1):
+     def train(self, sentences, total_words=None, word_count=0, batch_size=800, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
         #batch_size=800
-        batch_size=chunksize
+        batch_size=batch_size
         #batch_size=3200
         samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
         #print 'samples_per_epoch',samples_per_epoch
@@ -227,7 +227,15 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
             
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
-            self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+            # count =0
+            # for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
+            #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+            #     count +=1
+            #     if count > self.iter * samples_per_epoch/batch_size :
+            #         break
+
+            
             #print wv0
             #print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
             #sys.exit()
@@ -237,7 +245,14 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self,cbow_mean=self.cbow_mean)
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
-            self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+            self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
+            # count =0
+            # for g in train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size):
+            #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+            #     count +=1
+            #     if count > self.iter * samples_per_epoch/batch_size :
+            #         break
+
             #print wv0
             #print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
             #sys.exit()
@@ -249,18 +264,29 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 if __name__ == "__main__":
 
     input_file = 'test.txt'
-
-    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3)
+    
+    v_iter=100
+    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
     vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
     print( vsk.most_similar('the', topn=5))
     print( vs.most_similar('the', topn=5))
     
-    #vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=3,iter=1,sg=0)
-    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0)
+    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,iter=v_iter)
     vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
     print( vck.most_similar('the', topn=5))
     print( vc.most_similar('the', topn=5))
 
+    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=v_iter)
+    vs1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),size=5,iter=3)
+    print vsk1['the']
+    print vs1['the']
+    
+    vck1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=v_iter)
+    vc1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=3)
+    print vck1['the']
+    print vc1['the']
+
+    #sys.exit()
 
     ## negative sampling has bug
     
@@ -280,8 +306,9 @@ if __name__ == "__main__":
     
     
     from nltk.corpus import brown #, movie_reviews, treebank
-    print(brown.sents()[0])
+    #print(brown.sents()[0])
     brown_sents=list(brown.sents()[:400])
+    v_iter=100
     
     br = gensim.models.word2vec.Word2Vec(brown_sents)
     brk = Word2VecKeras(brown_sents,iter=3)
@@ -292,6 +319,20 @@ if __name__ == "__main__":
     brck = Word2VecKeras(brown_sents,iter=3,sg=0)
     print( brck.most_similar('the', topn=5))
     print( brc.most_similar('the', topn=5))
+
+    br1 = gensim.models.word2vec.Word2Vec(brown_sents,size=5,iter=v_iter)
+    brk1 = Word2VecKeras(brown_sents,size=5,iter=3)
+    print( brk1['the'])
+    print( br1['the'])
+
+
+    brc1 = gensim.models.word2vec.Word2Vec(brown_sents,sg=0,size=5,iter=v_iter)
+    brck1 = Word2VecKeras(brown_sents,sg=0,size=5,iter=3)
+    print( brck1['the'])
+    print( brc1['the'])
+
+
+
     
     # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
     # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
