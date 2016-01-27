@@ -116,9 +116,9 @@ def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,learn_vector
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
-    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1),name='embedding', input='index')
+    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1,weights=[model.syn0]),name='embedding', input='index')
     kerasmodel.add_node(Flatten(),name='embedflatten',input='embedding')
-    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='embedflatten')
+    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),weights=[model.syn1.T,np.zeros((code_dim))]), name='sigmoid', input='embedflatten')
     kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
     kerasmodel.compile('rmsprop', {'code':'mse'})
     return kerasmodel
@@ -196,12 +196,12 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
 
-    kerasmodel.add_node(Embedding(index_size, vector_size),name='embedding', input='index')
+    kerasmodel.add_node(Embedding(index_size, vector_size,weights=[model.syn0]),name='embedding', input='index')
     if cbow_mean:
         kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
     else:
         kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='average',input='embedding')
-    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0)), name='sigmoid', input='average')
+    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),weights=[model.syn1.T,np.zeros((code_dim))]), name='sigmoid', input='average')
     kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
     kerasmodel.compile('rmsprop', {'code':'mse'}) 
     return kerasmodel
@@ -210,7 +210,7 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
-     def train(self, sentences, total_words=None, word_count=0, batch_size=800, total_examples=None, queue_factor=2, report_delay=1):
+     def train(self, sentences, total_words=None, word_count=0, batch_size=100, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
@@ -228,6 +228,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+
             # count =0
             # for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
             #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
@@ -246,7 +247,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
-            # count =0
+
+            #count =0
             # for g in train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size):
             #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
             #     count +=1
@@ -265,7 +267,7 @@ if __name__ == "__main__":
 
     input_file = 'test.txt'
     
-    v_iter=100
+    v_iter=3
     vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
     vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
     print( vsk.most_similar('the', topn=5))
@@ -286,7 +288,7 @@ if __name__ == "__main__":
     print vck1['the']
     print vc1['the']
 
-    #sys.exit()
+    sys.exit()
 
     ## negative sampling has bug
     

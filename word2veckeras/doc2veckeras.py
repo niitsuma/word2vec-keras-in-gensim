@@ -424,22 +424,23 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
                 #print 'window',self.window
                 self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size,self.window,
                                                             model=self,
-                                                            learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden
+                                                            learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden,
+                                                            doctag_vectors=self.docvecs.doctag_syn0
                                                             )
 
                 # wv0=copy.copy(self.kerasmodel.nodes['embedword'].get_weights()[0][0])
                 # dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
                 
-                # self.kerasmodel.fit_generator(
-                #     train_document_dm_concat(self, docs, batch_size=batch_size),
-                #     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+                self.kerasmodel.fit_generator(
+                    train_document_dm_concat(self, docs, batch_size=batch_size),
+                    samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
                 
-                count =0
-                for g in train_document_dm_concat(self, docs, batch_size=batch_size):
-                    self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
-                    count +=1
-                    if count > self.iter * samples_per_epoch/batch_size :
-                        break
+                # count =0
+                # for g in train_document_dm_concat(self, docs, batch_size=batch_size):
+                #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                #     count +=1
+                #     if count > self.iter * samples_per_epoch/batch_size :
+                #         break
 
                 # print wv0
                 # print self.kerasmodel.nodes['embedword'].get_weights()[0][0]
@@ -518,34 +519,48 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
                                                            )
                 
 
-    def infer_vector(self, doc_words, steps=15):
+    def infer_vector_keras(self, doc_words, steps=10):
+    #def infer_vector(self, doc_words, steps=15):        
         vocab_size=len(self.vocab)
         docs=LabeledListSentence([doc_words])
-        batch_size=3
+        batch_size=5
+        #batch_size=10
+        #batch_size=100
+        #batch_size=1000
         samples_per_epoch=int(self.window*2*sum(map(len,docs)))
         
         count_max= steps * samples_per_epoch/batch_size +steps
-        
+        #print 'count_max',count_max
+        # print self.kerasmodel_infer.nodes['embedword'].get_weights()
+        # print self.kerasmodel_infer.nodes[ 'sigmoid'].get_weights()
+
+        doctag_vectors = empty((1, self.vector_size), dtype=REAL)
+        doctag_vectors[0] = self.seeded_vector(' '.join(doc_words))
+        doctag_locks = ones(1, dtype=REAL)
+        doctag_indexes = [0]
+        #self.kerasmodel_infer.nodes.get_weights()
+        self.kerasmodel_infer.nodes['embedindex'].set_weights([ doctag_vectors])
         count =0
         if self.sg:
             for g in train_batch_dbow(self, docs, self.alpha, batch_size=batch_size):
-                self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                self.kerasmodel_infer.fit(g, nb_epoch=1, verbose=0)
                 count +=1
                 if count > count_max:
                     break
         elif self.dm_concat:
             for g in train_document_dm_concat(self, docs, batch_size=batch_size):
-                self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                self.kerasmodel_infer.fit(g, nb_epoch=1, verbose=0)
                 count +=1
                 if count > count_max:
                     break
         else:
             for g in train_batch_dm(self, docs, batch_size=batch_size):
-                self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                self.kerasmodel_infer.fit(g, nb_epoch=1, verbose=0)
                 count +=1
                 if count > count_max:
                     break
-                
+        # print self.kerasmodel_infer.nodes['embedword'].get_weights()
+        # print self.kerasmodel_infer.nodes[ 'sigmoid'].get_weights()
         vecs=self.kerasmodel_infer.nodes['embedindex'].get_weights()[0]
         return vecs[0]
 
@@ -679,30 +694,34 @@ if __name__ == "__main__":
     for d in doc1:
         doc_words1=d.words
         break;
-
+    d_size=5
     
-    dvdbowk1=Doc2VecKeras(doc1,size=10,dm=0,iter=3)
+    dvdbowk1=Doc2VecKeras(doc1,size= d_size,dm=0,iter=3)
     print dvdbowk1.docvecs[0]
-    dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=0)
+    dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size= d_size,dm=0)
     print dvdbow1.docvecs[0]
 
     #sys.exit()
 
-    dvdmk1=Doc2VecKeras(doc1,size=10,dm=1,iter=3)
+    dvdmk1=Doc2VecKeras(doc1,size= d_size,dm=1,iter=10)
     print dvdmk1.docvecs[0]
-    dvdm1=gensim.models.doc2vec.Doc2Vec(doc1,size=10,dm=1)
+    dvdm1=gensim.models.doc2vec.Doc2Vec(doc1,size= d_size,dm=1,iter=1)
     print dvdm1.docvecs[0]
     print dvdm1.infer_vector(doc_words1)
-    print dvdmk1.infer_vector(doc_words1)
+    print dvdmk1.infer_vector(doc_words1, steps=1)
+    print dvdmk1.infer_vector(doc_words1, steps=100)
+    #print dvdmk1.infer_vector_keras(doc_words1, steps=1000)
+    print dvdmk1.infer_vector_keras(doc_words1)
     
-    #sys.exit()
+    # sys.exit()
 
-    dvdmck1=Doc2VecKeras(doc1,size=10,dm=1,dm_concat=1,iter=3)
+    dvdmck1=Doc2VecKeras(doc1,size= d_size,dm=1,dm_concat=1,iter=10)
     print dvdmck1.docvecs[0]
-    dvdmc1=gensim.models.doc2vec.Doc2Vec(doc1,dm_concat=1,size=10,dm=1,iter=3)
+    dvdmc1=gensim.models.doc2vec.Doc2Vec(doc1,dm_concat=1,size= d_size,dm=1,iter=10)
     print dvdmc1.docvecs[0]
     print dvdmc1.infer_vector(doc_words1)
     print dvdmck1.infer_vector(doc_words1)
+    print dvdmck1.infer_vector_keras(doc_words1)
 
 
     sys.exit()
