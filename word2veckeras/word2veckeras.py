@@ -52,32 +52,37 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
                   ):
 
     if word not in model.vocab:
+        #yield None
         return
     predict_word = model.vocab[word]  # target word (NN output)
-    
-    if model.hs:
-        y=np.zeros((len(model.vocab)), dtype=REAL)
-        x1=np.zeros((len(model.vocab)), dtype=REAL)
-        x1[predict_word.point]=1 #*scale
-        y[predict_word.point]=predict_word.code
-        x0=context_index
-        #x1=predict_word.index
-        return x0,x1,y
 
-    if model.negative:
-        x0=context_index
-        y=np.zeros((len(model.vocab)), dtype=REAL)
-        x1=np.zeros((len(model.vocab)), dtype=REAL)
+    for i,p in enumerate(predict_word.point):
+        #print p
+        yield context_index,p,predict_word.code[i]
+    #     #sys.exit()
+    # #if model.hs:
+    #     y=np.zeros((len(model.vocab)), dtype=REAL)
+    #     x1=np.zeros((len(model.vocab)), dtype=REAL)
+    #     x1[predict_word.point]=1 #*scale
+    #     y[predict_word.point]=predict_word.code
+    #     x0=context_index
+    #     #x1=predict_word.index
+    #     return x0,x1,y
+
+    # if model.negative:
+    #     x0=context_index
+    #     y=np.zeros((len(model.vocab)), dtype=REAL)
+    #     x1=np.zeros((len(model.vocab)), dtype=REAL)
         
-        word_indices = [predict_word.index]
-        while len(word_indices) < model.negative + 1:
-            w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
-            if w != predict_word.index:
-                word_indices.append(w)
+    #     word_indices = [predict_word.index]
+    #     while len(word_indices) < model.negative + 1:
+    #         w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
+    #         if w != predict_word.index:
+    #             word_indices.append(w)
 
-        x1[word_indices]=1
-        y[word_indices]=model.neg_labels
-        return x0,x1,y ##missed in develop branch
+    #     x1[word_indices]=1
+    #     y[word_indices]=model.neg_labels
+    #     return x0,x1,y ##missed in develop branch
 
 def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     
@@ -87,7 +92,8 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
     train_x1=[[0]]*batch_size
     train_y=[[0]]*batch_size
 
-    while 1:
+    #while 1:
+    if 1 :        
 
         for sentence in sentences:
             word_vocabs = [model.vocab[w] for w in sentence if w in model.vocab and
@@ -102,28 +108,41 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
                 for pos2, word2 in enumerate(word_vocabs[start:(pos + model.window + 1 - reduced_window)], start):
                     # don't train on the `word` itself
                     if pos2 != pos:
-                        xy=train_sg_pair(model, model.index2word[word.index], word2.index, alpha,scale=(window_length)/4)
-                        if xy !=None:
-                            (x0,x1,y)=xy
-                            train_x0[batch_count]=[x0]
-                            train_x1[batch_count]=x1
-                            train_y[batch_count]=y
-                            batch_count += 1
-                            
-                            if batch_count >= batch_size :
-                                yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
-                                batch_count=0
+                        xy_gen=train_sg_pair(model, model.index2word[word.index], word2.index, alpha,scale=(window_length)/4)
+                        for xy in xy_gen :
+                            if xy !=None:
+                                (x0,x1,y)=xy
+                                train_x0[batch_count]=[x0]
+                                train_x1[batch_count]=[x1]
+                                train_y[batch_count]=[y]
+                                batch_count += 1
+                                if batch_count >= batch_size :
+                                    yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
+                                    batch_count=0
+        yield { 'index':np.array(train_x0[:batch_count+1]), 'point':np.array(train_x1[:batch_count+1]), 'code':np.array(train_y[:batch_count+1])}
+        batch_count=0
+        
 
 def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,learn_vectors=True,learn_hidden=True,model=None):
 
     kerasmodel = Graph()
-    kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
+    #kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
+    kerasmodel.add_input(name='point' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
-    kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
+    #kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
     kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1,weights=[model.syn0]),name='embedding', input='index')
-    kerasmodel.add_node(Flatten(),name='embedflatten',input='embedding')
-    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),weights=[model.syn1.T,np.zeros((code_dim))]), name='sigmoid', input='embedflatten')
-    kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
+    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1,weights=[model.syn1]),name='embedpoint', input='point')
+    #kerasmodel.add_node(Embedding(index_size, vector_size, weights=[model.syn1]),name='embedpoint', input='point')
+    #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1),name='embedpoint', input='point')
+    #kerasmodel.add_node(Merge([kerasmodel.nodes['embedword'],kerasmodel.nodes['embedpoint'] ],mode='mul'),name='merge')
+    #kerasmodel.add_node(Activation('sigmoid'), name='sigmoid', input='merge')
+    #kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',inputs=['embedword','embedpoint'], merge_mode='dot',dot_axes=2)
+    kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',inputs=['embedding','embedpoint'], merge_mode='dot',dot_axes=2)
+    #kerasmodel.add_node(Lambda(lambda x:x), name='sigmoid',inputs=['embedword','embedpoint'], merge_mode='mul')
+    #kerasmodel.add_node(Flatten(),name='embedflatten',input='embedding')
+    #kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),weights=[model.syn1.T,np.zeros((code_dim))]), name='sigmoid', input='embedflatten')
+    #kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
+    kerasmodel.add_output(name='code',input='sigmoid')
     kerasmodel.compile('rmsprop', {'code':'mse'})
     return kerasmodel
 
@@ -214,16 +233,17 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
-     def train(self, sentences, total_words=None, word_count=0, batch_size=800, total_examples=None, queue_factor=2, report_delay=1):
+     def train(self, sentences, total_words=None, word_count=0, batch_size=8000, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
         #batch_size=800
         #batch_size=batch_size
         #batch_size=3200
-        #samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
-        batch_size=int(self.window*2*sum(map(len,sentences)))
-        samples_per_epoch=2
+        #batch_size=3
+        #batch_size=int(self.window*2*sum(map(len,sentences)))
+        #samples_per_epoch=2
+        samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
         
         print 'samples_per_epoch',samples_per_epoch,batch_size
 
@@ -232,19 +252,27 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         
         if self.sg:
             self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
+            #print self.kerasmodel.predict({'index':np.array([[0],[1]]),'point':np.array([[0,1],[1,0]])})
+            #print self.kerasmodel.predict({'index':np.array([[0],[1]]),'point':np.array([[1],[0]])})
+            #sys.exit()
+
+            samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
+            batch_size=8000
             
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
 
-            self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+            #self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+            for n in range(self.iter):
+                count =0
+                for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
+                    #print g
+                    self.kerasmodel.fit(g, nb_epoch=5, verbose=0)
+                    #sys.exit()
+                    #count +=1
+                    # if count > self.iter * samples_per_epoch/batch_size :
+                    #     break
+                #print count
 
-            # count =0
-            # for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
-            #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
-            #     count +=1
-            #     if count > self.iter * samples_per_epoch/batch_size :
-            #         break
-
-            
             #print wv0
             #print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
             #sys.exit()
@@ -276,7 +304,10 @@ if __name__ == "__main__":
     input_file = 'test.txt'
     
     v_iter=1
-    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
+    #vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
+    
+    #sys.exit()
+    
     # vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
     # print( vsk.most_similar('the', topn=5))
     # print( vs.most_similar('the', topn=5))
@@ -286,13 +317,15 @@ if __name__ == "__main__":
     # print( vck.most_similar('the', topn=5))
     # print( vc.most_similar('the', topn=5))
 
-    vs1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),size=5,iter=5)
+    vs1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),size=100,iter=1)
     print vs1['the']
-    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=1)
+    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=100,iter=1)
     print vsk1['the']
-    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=10)
+    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=100,iter=5)
     print vsk1['the']
 
+    print( vs1.most_similar('the', topn=4))
+    print( vsk1.most_similar('the', topn=4))
     
     # vck1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=v_iter)
     # vc1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=3)
@@ -342,17 +375,18 @@ if __name__ == "__main__":
     # for x, y in model.most_similar(positive=["香川"], negative=["うどん"], topn=3):
     #     print x, y
     #sys.exit()
-    ns=[1,10,20,50,100]
+    #ns=[1,10,20,50,100]
+    ns=[1]
     #ns=[200,400,1000]
     for n in ns :
         print n
-        brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=0,iter=n)
+        brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=1,iter=n)
         print brc.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
         #print brc.most_similar_cosmul(positive=['woman', 'he'], negative=['man'], topn=4)
     # sys.exit()
     for n in ns :
         print n
-        brck = Word2VecKeras(brown_sents,iter=v_iter,sg=0)
+        brck = Word2VecKeras(brown_sents,iter=v_iter,sg=1)
         print brck.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
     sys.exit()
         
