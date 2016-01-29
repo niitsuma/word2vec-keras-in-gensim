@@ -47,7 +47,9 @@ def queue_to_list(q,extract_size):
 
 
 def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_hidden=True,
-                  context_vectors=None, context_locks=None):
+                  context_vectors=None, context_locks=None,
+                  scale=1.0
+                  ):
 
     if word not in model.vocab:
         return
@@ -56,7 +58,7 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
     if model.hs:
         y=np.zeros((len(model.vocab)), dtype=REAL)
         x1=np.zeros((len(model.vocab)), dtype=REAL)
-        x1[predict_word.point]=1
+        x1[predict_word.point]=1 #*scale
         y[predict_word.point]=predict_word.code
         x0=context_index
         #x1=predict_word.index
@@ -95,10 +97,12 @@ def train_batch_sg(model, sentences, alpha, work=None,batch_size=100):
 
                 # now go over all words from the (reduced) window, predicting each one in turn
                 start = max(0, pos - model.window + reduced_window)
+                window_length=len(word_vocabs[start:(pos + model.window + 1 - reduced_window)])
+                #print window_length,
                 for pos2, word2 in enumerate(word_vocabs[start:(pos + model.window + 1 - reduced_window)], start):
                     # don't train on the `word` itself
                     if pos2 != pos:
-                        xy=train_sg_pair(model, model.index2word[word.index], word2.index, alpha)
+                        xy=train_sg_pair(model, model.index2word[word.index], word2.index, alpha,scale=(window_length)/4)
                         if xy !=None:
                             (x0,x1,y)=xy
                             train_x0[batch_count]=[x0]
@@ -210,15 +214,18 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
-     def train(self, sentences, total_words=None, word_count=0, batch_size=100, total_examples=None, queue_factor=2, report_delay=1):
+     def train(self, sentences, total_words=None, word_count=0, batch_size=800, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
         #batch_size=800
-        batch_size=batch_size
+        #batch_size=batch_size
         #batch_size=3200
-        samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
-        #print 'samples_per_epoch',samples_per_epoch
+        #samples_per_epoch=int(self.window*2*sum(map(len,sentences)))
+        batch_size=int(self.window*2*sum(map(len,sentences)))
+        samples_per_epoch=2
+        
+        print 'samples_per_epoch',samples_per_epoch,batch_size
 
         if self.hs and self.negative>0 :
             raise ValueError("both using hs and negative not implemented") 
@@ -227,6 +234,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self)
             
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
+
             self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
 
             # count =0
@@ -267,28 +275,31 @@ if __name__ == "__main__":
 
     input_file = 'test.txt'
     
-    v_iter=3
-    vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
-    vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
-    print( vsk.most_similar('the', topn=5))
-    print( vs.most_similar('the', topn=5))
+    v_iter=1
+    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
+    # vs = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file))
+    # print( vsk.most_similar('the', topn=5))
+    # print( vs.most_similar('the', topn=5))
     
-    vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,iter=v_iter)
-    vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
-    print( vck.most_similar('the', topn=5))
-    print( vc.most_similar('the', topn=5))
+    # vck = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,iter=v_iter)
+    # vc = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0)
+    # print( vck.most_similar('the', topn=5))
+    # print( vc.most_similar('the', topn=5))
 
-    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=v_iter)
-    vs1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),size=5,iter=3)
-    print vsk1['the']
+    vs1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),size=5,iter=5)
     print vs1['the']
-    
-    vck1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=v_iter)
-    vc1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=3)
-    print vck1['the']
-    print vc1['the']
+    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=1)
+    print vsk1['the']
+    vsk1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),size=5,iter=10)
+    print vsk1['the']
 
-    sys.exit()
+    
+    # vck1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=v_iter)
+    # vc1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=3)
+    # print vck1['the']
+    # print vc1['the']
+
+    #sys.exit()
 
     ## negative sampling has bug
     
@@ -309,18 +320,46 @@ if __name__ == "__main__":
     
     from nltk.corpus import brown #, movie_reviews, treebank
     #print(brown.sents()[0])
-    brown_sents=list(brown.sents()[:400])
-    v_iter=100
+    brown_sents=list(brown.sents())
+    #brown_sents=list(brown.sents()[:10000])
+    brown_sents=list(brown.sents())[:2000]
+    v_iter=1
     
-    br = gensim.models.word2vec.Word2Vec(brown_sents)
-    brk = Word2VecKeras(brown_sents,iter=3)
-    print( brk.most_similar('the', topn=5))
-    print( br.most_similar('the', topn=5))
+    # br = gensim.models.word2vec.Word2Vec(brown_sents)
+    # print br.most_similar_cosmul(positive=['woman', 'he'], negative=['man'], topn=10)
+    # brk = Word2VecKeras(brown_sents,iter=v_iter)
+    # #print( brk.most_similar('the', topn=5))
+    # #print( br.most_similar('the', topn=5))
+    # #print brk.most_similar_cosmul(positive=['france', 'england'], negative=['london'], topn=10)
+    # #print br.most_similar_cosmul(positive=['france', 'england'], negative=['london'], topn=10)
+    # #print brk.most_similar(positive=['woman', 'king'], negative=['man'])
+    # #print br.most_similar(positive=['woman', 'king'], negative=['man'])
+    # #print br.most_similar_cosmul(positive=['woman', 'husband'], negative=['man'], topn=10)
+    # #print brk.most_similar_cosmul(positive=['woman', 'husband'], negative=['man'], topn=10)
+    # print brk.most_similar_cosmul(positive=['woman', 'he'], negative=['man'], topn=10)
 
-    brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=0)
-    brck = Word2VecKeras(brown_sents,iter=3,sg=0)
-    print( brck.most_similar('the', topn=5))
+
+    # for x, y in model.most_similar(positive=["香川"], negative=["うどん"], topn=3):
+    #     print x, y
+    #sys.exit()
+    ns=[1,10,20,50,100]
+    #ns=[200,400,1000]
+    for n in ns :
+        print n
+        brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=0,iter=n)
+        print brc.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
+        #print brc.most_similar_cosmul(positive=['woman', 'he'], negative=['man'], topn=4)
+    # sys.exit()
+    for n in ns :
+        print n
+        brck = Word2VecKeras(brown_sents,iter=v_iter,sg=0)
+        print brck.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
+    sys.exit()
+        
     print( brc.most_similar('the', topn=5))
+    print( brck.most_similar('the', topn=5))
+    sys.exit()
+
 
     br1 = gensim.models.word2vec.Word2Vec(brown_sents,size=5,iter=v_iter)
     brk1 = Word2VecKeras(brown_sents,size=5,iter=3)
