@@ -48,7 +48,7 @@ def queue_to_list(q,extract_size):
 
 def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_hidden=True,
                   context_vectors=None, context_locks=None,
-                  scale=1.0
+                  scale=1
                   ):
 
     if word not in model.vocab:
@@ -56,10 +56,10 @@ def train_sg_pair(model, word, context_index, alpha, learn_vectors=True, learn_h
     predict_word = model.vocab[word]  # target word (NN output)
     
     if model.hs:
-        y=np.zeros((len(model.vocab)), dtype=REAL)
-        x1=np.zeros((len(model.vocab)), dtype=REAL)
-        x1[predict_word.point]=1 #*scale
-        y[predict_word.point]=predict_word.code
+        y=np.zeros((len(model.vocab)), dtype='int8')
+        x1=np.zeros((len(model.vocab)), dtype='int8')
+        x1[predict_word.point]=1*len(model.vocab)  #*scale
+        y[predict_word.point]=predict_word.code*len(model.vocab)
         x0=context_index
         #x1=predict_word.index
         return x0,x1,y
@@ -214,7 +214,7 @@ def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,model=None
 
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
-     def train(self, sentences, total_words=None, word_count=0, batch_size=800, total_examples=None, queue_factor=2, report_delay=1):
+     def train(self, sentences, total_words=None, word_count=0, batch_size=5, total_examples=None, queue_factor=2, report_delay=1):
         vocab_size=len(self.vocab)
         #print 'Word2VecKerastrain'
         #batch_size=800 ##optimized 1G mem video card
@@ -235,14 +235,14 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
 
-            self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+            # self.kerasmodel.fit_generator(train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
 
-            # count =0
-            # for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
-            #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
-            #     count +=1
-            #     if count > self.iter * samples_per_epoch/batch_size :
-            #         break
+            count =0
+            for g in train_batch_sg(self, sentences, self.alpha, work=None,batch_size=batch_size):
+                self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                count +=1
+                if count > self.iter * samples_per_epoch/batch_size :
+                    break
 
             
             #print wv0
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     
     from nltk.corpus import brown #, movie_reviews, treebank
     #print(brown.sents()[0])
-    brown_sents=list(brown.sents())
+    #brown_sents=list(brown.sents())
     #brown_sents=list(brown.sents()[:10000])
     brown_sents=list(brown.sents())[:2000]
     v_iter=1
@@ -342,17 +342,18 @@ if __name__ == "__main__":
     # for x, y in model.most_similar(positive=["香川"], negative=["うどん"], topn=3):
     #     print x, y
     #sys.exit()
-    ns=[1,10,20,50,100]
+    ns=[1]
     #ns=[200,400,1000]
     for n in ns :
         print n
-        brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=0,iter=n)
+        brc = gensim.models.word2vec.Word2Vec(brown_sents,sg=1,iter=n)
         print brc.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
         #print brc.most_similar_cosmul(positive=['woman', 'he'], negative=['man'], topn=4)
     # sys.exit()
+    ns=[1,5,10,20]
     for n in ns :
         print n
-        brck = Word2VecKeras(brown_sents,iter=v_iter,sg=0)
+        brck = Word2VecKeras(brown_sents,iter=v_iter,sg=1)
         print brck.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=4)
     sys.exit()
         
