@@ -817,3 +817,11 @@ if __name__ == "__main__":
     print(dvvckdm.docvecs.most_similar(0))
 
     
+
+
+
+    dvvsdm=Doc2VecKeras()
+    dvvsdm.train_with_word2vec_instance(
+        brown_docs_sub,
+        vbrs,
+        dm=1,learn_words=False,iter=d_iter)
