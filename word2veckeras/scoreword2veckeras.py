@@ -126,9 +126,17 @@ def train_batch_score_cbow(model, scored_word_sentences, alpha=None, work=None, 
 
 
                                 
-def build_keras_model_score_word_sg(index_size,vector_size,vocab_size,code_dim,score_vector_size,model=None):
+def build_keras_model_score_word_sg(index_size,vector_size,vocab_size,code_dim,score_vector_size,sub_batch_size=256,model=None):
 
     kerasmodel = Graph()
+
+    kerasmodel.add_input(name='point' , input_shape=(sub_batch_size,), dtype=int)
+    kerasmodel.add_input(name='index' , input_shape=(sub_batch_size,), dtype=int)
+    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1,weights=[model.syn0]),name='embedding', input='index')
+    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1,weights=[model.syn1]),name='embedpoint', input='point')
+
+    
+
     kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
     kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
     
