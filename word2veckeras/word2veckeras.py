@@ -146,7 +146,8 @@ def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,sub_batch_si
     kerasmodel.add_input(name='point' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size,weights=[model.syn0]),name='embedding', input='index')
-    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size,weights=[model.syn1]),name='embedpoint', input='point')
+    #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size,weights=[model.syn1]),name='embedpoint', input='point')
+    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size                      ),name='embedpoint', input='point')
     
     #kerasmodel.add_node(Embedding(index_size, vector_size, weights=[model.syn1]),name='embedpoint', input='point')
     #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1),name='embedpoint', input='point')
@@ -361,13 +362,21 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
                batch_size=128 #512 #256
                ,sub_batch_size=16 #32 #128 #128  #256 #128 #512 #256 #1
               ):
-        #print 'Word2VecKerastrain'
+        # print 'Word2VecKerastrain',hasattr(self, 'syn0'), hasattr(self, 'syn1'),len(self.vocab),self.hs,self.negative
+        # #print self.vocab
+        # print self.vocab[u'the']
+        # print dir(self.vocab[u'the'])
+
+        if self.negative>0 or not (self.hs)  :
+            raise ValueError("negative sampling not implemented. plz use hs=1")
         if self.hs and self.negative>0 :
             raise ValueError("both using hs and negative not implemented")
+
+        #self.build_vocab(sentences)
         
         trim_rule=None
         if len(self.vocab) == 0 : #not hasattr(self, 'syn0'):
-            #print 'build_vocab'
+            print 'build_vocab'
             self.build_vocab(sentences, trim_rule=trim_rule)
             #print self.syn0
         vocab_size=len(self.vocab)
@@ -408,7 +417,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             #     #count =0
             #     for g in gen:
             #         print g
-            #         self.kerasmodel.fit(g, nb_epoch=1, verbose=1)
+            #         #self.kerasmodel.fit(g, nb_epoch=1, verbose=1)
             #         sys.exit()
             #         #count +=1
             #         # if count > self.iter * samples_per_epoch/batch_size :
@@ -421,7 +430,7 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             #super(Doc2Vec, self).reset_from(other_model)
   
             self.syn0=np.copy(self.kerasmodel.nodes['embedding'].get_weights()[0])
-            self.syn1=np.copy(self.kerasmodel.nodes['embedpoint'].get_weights()[0])
+            #self.syn1=np.copy(self.kerasmodel.nodes['embedpoint'].get_weights()[0])
             #super(Word2VecKeras,self).syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
             #print 'inner1',np.linalg.norm(wv0-self.syn0)
             #super(Word2VecKeras,self).reset_from(self)
@@ -460,68 +469,30 @@ if __name__ == "__main__":
         return np.mean([np.linalg.norm(w2v1[w]-w2v2[w]) for w in w2v1.vocab if w in w2v2.vocab])
     
     input_file = 'test.txt'
+    sents=gensim.models.word2vec.LineSentence(input_file)
     
     v_iter=1
     v_size=5
     sg_v=1
     topn=4
-    sents=gensim.models.word2vec.LineSentence(input_file)
-    
-    # vsk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=v_iter)
-    # sys.exit()
-    
-    # vs = gensim.models.word2vec.Word2Vec(sents)
-    # print( vsk.most_similar('the', topn=5))
-    # print( vs.most_similar('the', topn=5))
-    
-    # vck = Word2VecKeras(sents,sg=0,iter=v_iter)
-    # vc = gensim.models.word2vec.Word2Vec(sents,sg=0)
-    # print( vck.most_similar('the', topn=5))
-    # print( vc.most_similar('the', topn=5))
+    hs=1
+    negative=0
 
-    vs1 = gensim.models.word2vec.Word2Vec(sents,sg=sg_v,size=v_size,iter=1)
-    # # #vsk1 = Word2VecKeras(sents,sg=sg_v,size=v_size,iter=1)
-    #print( vs1.most_similar('the', topn=topn))
-    vsk1 = Word2VecKeras(sents,sg=sg_v,size=v_size,iter=1)
-    #print( vsk1.most_similar('the', topn=topn))
+    
+    
+    
+
+
+    vs1 = gensim.models.word2vec.Word2Vec(sents,hs=1,negative=0,sg=sg_v,size=v_size,iter=v_iter)
+    vsk1 = Word2VecKeras(sents,hs=1,negative=0,sg=sg_v,size=v_size,iter=v_iter)
     print 'compare',vsk1.compare_w2v(vs1)
-    #print vsk1['the']
     vsk1.iter=20
     vsk1.train(sents,batch_size=100,sub_batch_size=64)
-    #print( vsk1.most_similar('the', topn=topn))
     print 'compare',vsk1.compare_w2v(vs1)
-    #print vsk1['the']
-    
     print vs1['the']
     print vsk1['the']
-    
-    #sys.exit()
-    
-    # vsk1.iter=3
-    # vsk1.train(gensim.models.word2vec.LineSentence(input_file),batch_size=2,sub_batch_size=1)
-    # print( vsk1.most_similar('the', topn=topn))
-    # print vsk1['the']
-
-    
-    # vck1 = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=v_iter)
-    # vc1 = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,size=5,iter=3)
-    # print vck1['the']
-    # print vc1['the']
-
-    #sys.exit()
-
-    ## negative sampling has bug
-    
-    # vsnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,hs=0,negative=5)
-    # vsn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),negative=5)
-    # print( vsnk.most_similar('the', topn=5))
-    # print( vsn.most_similar('the', topn=5))
-    
-    # vcnk = Word2VecKeras(gensim.models.word2vec.LineSentence(input_file),iter=3,sg=0,hs=0,negative=5)
-    # vcn = gensim.models.word2vec.Word2Vec(gensim.models.word2vec.LineSentence(input_file),sg=0,negative=5)
-    # print( vcnk.most_similar('the', topn=5))
-    # print( vcn.most_similar('the', topn=5))
-
+    print( vs1.most_similar('the', topn=topn))
+    print( vsk1.most_similar('the', topn=topn))
 
     #sys.exit()
 
@@ -532,83 +503,23 @@ if __name__ == "__main__":
     #brown_sents=list(brown.sents())
     #brown_sents=list(brown.sents()[:10000])
     brown_sents=list(brown.sents())[:2000]
-    v_iter=2
 
+    br = gensim.models.word2vec.Word2Vec(brown_sents,hs=1,negative=0,sg=sg_v,iter=v_iter)
+    brk =Word2VecKeras(brown_sents,hs=1,negative=0,sg=sg_v,iter=v_iter)
 
-
-    br = gensim.models.word2vec.Word2Vec(brown_sents,sg=sg_v,iter=1)
-    print br.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-    brk =Word2VecKeras(brown_sents,sg=sg_v,iter=1)
-    print brk.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
     print 'compare',brk.compare_w2v(br)
-    #print(brk.most_similar('the', topn=5))
-    #print brk['the']
     brk.train(brown_sents)
     print 'compare',brk.compare_w2v(br)
-    #print brk.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-    #print brk.most_similar('the', topn=5)
-    #print brk['the']
+    print brk.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
 
     br_dummy = gensim.models.word2vec.Word2Vec(brown_sents,sg=sg_v,iter=1)
     copy_word2vec_instance_from_to(brk,br_dummy)
     print br_dummy.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-    #print(br_dummy.most_similar('the', topn=5))
+    print(br_dummy.most_similar('the', topn=5))
+
+    print br.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
+    print brk.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
+    #print brk.most_similar('the', topn=5)
+    #print(brk.most_similar('the', topn=5))
     
-
-    sys.exit()
-
-    #ns=[200,400,1000]
-    ns=[1,2,20,100,200,400,1000]
-    # ns=[1,2,20]
-    # br = gensim.models.word2vec.Word2Vec(brown_sents,sg=sg_v,iter=1)
-    # for n in ns :
-    #     #print n
-    #     br.iter=n
-    #     br.train(brown_sents)#,sg=sg_v,iter=n)
-    #     print n,compare_w2v(br,brk)
-    #     print br.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-
-        #print br['the']
-    #sys.exit()
     
-    for n in ns :
-        brk.iter=n
-        #brck =Word2VecKeras(brown_sents,iter=n,sg=sg_v)
-        brk.train(brown_sents)#,iter=n,sg=sg_v)
-        print n,compare_w2v(brk,br)
-        #print brk.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-        copy_word2vec_instance_from_to(brk,br_dummy)
-        print br_dummy.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-
-        #print brck['the']
-
-    sys.exit()
-        
-    print( brc.most_similar('the', topn=5))
-    print( brck.most_similar('the', topn=5))
-    sys.exit()
-
-
-    br1 = gensim.models.word2vec.Word2Vec(brown_sents,size=5,iter=v_iter)
-    brk1 = Word2VecKeras(brown_sents,size=5,iter=3)
-    print( brk1['the'])
-    print( br1['the'])
-
-
-    brc1 = gensim.models.word2vec.Word2Vec(brown_sents,sg=0,size=5,iter=v_iter)
-    brck1 = Word2VecKeras(brown_sents,sg=0,size=5,iter=3)
-    print( brck1['the'])
-    print( brc1['the'])
-
-
-
-    
-    # brn = gensim.models.word2vec.Word2Vec(brown.sents(),negative=5)
-    # brnk = Word2VecKeras(brown.sents(),iter=3,negative=5)
-    # print( brnk.most_similar('the', topn=5))
-    # print( brn.most_similar('the', topn=5))
-
-    # brcn = gensim.models.word2vec.Word2Vec(brown.sents(),sg=0,negative=5)
-    # brcnk = Word2VecKeras(brown.sents(),iter=3,sg=0,negative=5)
-    # print( brcnk.most_similar('the', topn=5))
-    # print( brcn.most_similar('the', topn=5))
