@@ -32,6 +32,9 @@ from keras.layers.embeddings import Embedding
 from keras.optimizers import SGD
 from keras.objectives import mse
 
+from sklearn.base import BaseEstimator,RegressorMixin, ClassifierMixin
+from sklearn.linear_model import LogisticRegression,LogisticRegressionCV
+
 from word2veckeras import train_sg_pair,train_cbow_pair,queue_to_list
 
 
@@ -643,7 +646,100 @@ class LabeledListSentence(object):
             #yield LabeledSentence(words, ['SENT_{0}'.format(i)])
             yield gensim.models.doc2vec.TaggedDocument(words, [i])
 
+class SentenceClassifier(BaseEstimator, ClassifierMixin):
+    def __init__(self,
+                 sents_shuffle=False,
+                 doc2vec=gensim.models.doc2vec.Doc2Vec()
+                 ):
+        argdict= locals()
+        argdict.pop('argdict',None)
+        argdict.pop('self',None)
+        vars(self).update(argdict)
+        #print argdict
+    
+    def fit(self, X, y):
+        self.sents_train=X
+        self.Y_train=y
+        return self
+    
+    def doc2vec_set(self,all_docs):
+        #print 'doc2vec_set,SentenceClassifier'
+        self.doc2vec.build_vocab(all_docs)
+        self.doc2vec.train(all_docs)
 
+    def predict(self,X):
+        self.sents_test=X
+        self.sents_all=self.sents_train + self.sents_test
+
+        if self.sents_shuffle :
+            s_indexs=range(len(self.sents_all))
+            random.shuffle(s_indexs)
+            s_invers_indexs=range(len(s_indexs))
+            for n in range(len(s_indexs)):
+                s_invers_indexs[s_indexs[n]]=n
+            sents_all=[self.sents_all[n] for n in s_indexs]
+        else:
+            sents_all=self.sents_all
+        all_docs = list(LabeledListSentence(self.sents_all))
+        
+        self.doc2vec_set(all_docs)
+        #print 'size',self.doc2vec.vector_size
+
+        self.X_train= [self.doc2vec.infer_vector(s) for s in self.sents_train]
+        self.X_test= [self.doc2vec.infer_vector(s) for s in self.sents_test]
+        self.logistic =LogisticRegressionCV(class_weight='balanced')#,n_jobs=-1)
+        self.logistic.fit(self.X_train,self.Y_train)
+        Y_test_predict=self.logistic.predict(self.X_test)
+        return Y_test_predict
+
+doc2vec_init_param_dict={
+    #'sents_shuffle': False,
+    'comment': None,
+    'dm': 1, 'dm_mean': 0, 'hs': 1, 'sample': 0, 'seed': 1, 'dbow_words': 0, 'dm_concat': 0,
+    'min_count': 5, 'max_vocab_size': None, 'alpha': 0.025, 'dm_tag_count': 1,
+    'docvecs_mapfile': None,
+    'size': 300,
+    'documents': None, 'trim_rule': None, 'workers': 1, 'negative': 0, 'docvecs': None, 'window': 8,
+    #'kwargs': {},
+    'min_alpha': 0.0001,
+    'iter':1
+    }
+
+class Doc2VecClassifier(SentenceClassifier):
+    def __init__(self,
+                 sents_shuffle=False,
+                 documents=None, size=300, alpha=0.025, window=8, min_count=5,
+                 max_vocab_size=None, sample=0, seed=1, workers=1, min_alpha=0.0001,
+                 dm=1, hs=1, negative=0, dbow_words=0, dm_mean=0, dm_concat=0, dm_tag_count=1,
+                 docvecs=None, docvecs_mapfile=None, comment=None, trim_rule=None,
+                 iter=1,
+                 #**kwargs
+                 ):
+        argdict= locals()
+        argdict.pop('argdict',None)
+        argdict.pop('self',None)
+        vars(self).update(doc2vec_init_param_dict)
+        vars(self).update(argdict)
+        # print vars(self)
+        # doc2vec_init_dict={k:vars(self)[k] for k in vars(self).keys()  if k in doc2vec_init_param_dict}
+        # #doc2vec_init_dict['documents']=all_docs
+        # #print doc2vec_init_dict
+        # self.doc2vec=gensim.models.doc2vec.Doc2Vec(**doc2vec_init_dict)
+        
+        #print vars(self)
+        # super(Doc2VecClassifier,self).__init__(
+        #         sents_shuffle=sents_shuffle,
+        #         )
+        
+    def doc2vec_set(self,all_docs):
+        #print 'doc2vec_set,Doc2VecClassifier'
+        doc2vec_init_dict={k:vars(self)[k] for k in vars(self).keys()  if k in doc2vec_init_param_dict}
+        doc2vec_init_dict['documents']=all_docs
+        #print doc2vec_init_dict
+        self.doc2vec=gensim.models.doc2vec.Doc2Vec(**doc2vec_init_dict)
+
+    
+            
 def debug_fit():            
     kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,code_dim=2,
                                     word_vectors=np.array([[1,2],[3,4],[5,6]]),
@@ -686,8 +782,9 @@ def debug_fit():
     
 if __name__ == "__main__":
 
+    test_SentenceClassifier()
     # debug_fit()
-    # sys.exit()
+    sys.exit()
     
     input_file = 'test.txt'
     doc1=gensim.models.doc2vec.TaggedLineDocument(input_file)
