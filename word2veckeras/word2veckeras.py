@@ -55,11 +55,20 @@ def train_sg_pair(model, word, context_index, alpha=None, learn_vectors=True, le
         #yield None
         return
     predict_word = model.vocab[word]  # target word (NN output)
+    if model.hs:
+        for i,p in enumerate(predict_word.point):
+            #print p
+            yield context_index,p,predict_word.code[i]
+    if model.negative:
+        word_indices = [predict_word.index]
+        while len(word_indices) < model.negative + 1:
+            w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
+            if w != predict_word.index:
+                word_indices.append(w)
+        for i,p in enumerate(word_indices):
+            yield context_index, p+model.keras_syn1_negative_base_index, model.neg_labels[i]
+            
 
-    for i,p in enumerate(predict_word.point):
-        #print p
-        yield context_index,p,predict_word.code[i]
-    #     #sys.exit()
     # #if model.hs:
     #     y=np.zeros((len(model.vocab)), dtype=REAL)
     #     x1=np.zeros((len(model.vocab)), dtype=REAL)
@@ -131,7 +140,13 @@ def train_batch_sg(model, sentences, alpha=None, work=None,sub_batch_size=256,ba
         # batch_count=0
         
 
-def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,sub_batch_size=256,learn_vectors=True,learn_hidden=True,model=None):
+def build_keras_model_sg(index_size,vector_size,
+                         #vocab_size,
+                         context_size,
+                         code_dim,
+                         sub_batch_size=256,
+                         learn_vectors=True,learn_hidden=True,
+                         model=None):
 
     #print 'build_keras_model_sg'
 
@@ -147,7 +162,7 @@ def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,sub_batch_si
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size,weights=[model.syn0]),name='embedding', input='index')
     #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size,weights=[model.syn1]),name='embedpoint', input='point')
-    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=sub_batch_size                      ),name='embedpoint', input='point')
+    kerasmodel.add_node(Embedding(context_size, vector_size, input_length=sub_batch_size                      ),name='embedpoint', input='point')
     
     #kerasmodel.add_node(Embedding(index_size, vector_size, weights=[model.syn1]),name='embedpoint', input='point')
     #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1),name='embedpoint', input='point')
@@ -189,10 +204,20 @@ def build_keras_model_sg(index_size,vector_size,vocab_size,code_dim,sub_batch_si
 
 
 def train_cbow_pair(model, word, input_word_indices, l=None, alpha=None, learn_vectors=True, learn_hidden=True):
-
-    for i,p in enumerate(word.point):
-        #print p
-        yield input_word_indices,[p],[word.code[i]]
+    if model.hs:
+        for i,p in enumerate(word.point):
+            #print p
+            yield input_word_indices,[p],[word.code[i]]
+    if model.negative:
+        word_indices = [word.index]
+        while len(word_indices) < model.negative + 1:
+            w = model.cum_table.searchsorted(model.random.randint(model.cum_table[-1]))
+            if w != word.index:
+                word_indices.append(w)
+        #print word_indices
+        for i,p in enumerate(word_indices):
+            yield input_word_indices, [p+model.keras_syn1_negative_base_index], [model.neg_labels[i]]
+            
     # if model.hs:
     #     x0=input_word_indices
     #     x1=np.zeros((len(model.vocab)), dtype=REAL)
@@ -234,7 +259,7 @@ def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_si
     w_len_queue=[]
 
     while 1:
-        print 'train_batch_cbow'
+        #print 'train_batch_cbow'
         for xy in train_batch_cbow_xy_generator(model, sentences):
             if xy != None:
                 w_len=len(xy[0])
@@ -255,13 +280,14 @@ def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_si
                             'code':np.array(train[2])}
 
         
-def build_keras_model_cbow(index_size,vector_size,vocab_size,code_dim,sub_batch_size=1,model=None,cbow_mean=False):
+def build_keras_model_cbow(index_size,vector_size,context_size,code_dim,sub_batch_size=1,model=None,cbow_mean=False):
  
     kerasmodel = Graph()
     kerasmodel.add_input(name='point' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
     kerasmodel.add_node(Embedding(index_size, vector_size, weights=[model.syn0]),name='embedding', input='index')
-    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1, weights=[model.syn1]),name='embedpoint', input='point')
+    #kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1, weights=[model.syn1]),name='embedpoint', input='point')
+    kerasmodel.add_node(Embedding(context_size, vector_size, input_length=1,),name='embedpoint', input='point')    
     if cbow_mean:
         kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='average',input='embedding')
     else:
@@ -367,10 +393,24 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
         # print self.vocab[u'the']
         # print dir(self.vocab[u'the'])
 
-        if self.negative>0 or not (self.hs)  :
-            raise ValueError("negative sampling not implemented. plz use hs=1")
-        if self.hs and self.negative>0 :
-            raise ValueError("both using hs and negative not implemented")
+
+        if self.negative>0 and self.hs :
+            self.keras_syn1_negative_base_index=len(self.vocab)
+            self.keras_syn1_index_size=len(self.vocab)*2
+        else:
+            self.keras_syn1_negative_base_index=0
+            self.keras_syn1_index_size=len(self.vocab)
+
+        self.neg_labels = []
+        if self.negative > 0:
+            # precompute negative labels optimization for pure-python training
+            self.neg_labels = np.zeros(self.negative + 1,dtype='int8')
+            self.neg_labels[0] = 1
+            
+        # if self.negative>0 or not (self.hs)  :
+        #     raise ValueError("negative sampling not implemented. plz use hs=1")
+        # if self.hs and self.negative>0 :
+        #     raise ValueError("both using hs and negative not implemented")
 
         #self.build_vocab(sentences)
         
@@ -386,17 +426,18 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             if self.sub_batch_size != sub_batch_size :
                 sub_batch_size_update=True
                 self.sub_batch_size=sub_batch_size
+
+        # sub_batch_size=2
+        # batch_size=3
+        # samples_per_epoch=4
+
         if self.sg:
             samples_per_epoch=max(1,int((self.iter*self.window*2*sum(map(len,sentences)))/(sub_batch_size)))
-            
-            # sub_batch_size=2
-            # batch_size=3
-            # samples_per_epoch=4
-            
+
             #print 'samples_per_epoch',samples_per_epoch,batch_size,sub_batch_size
             
             if not hasattr(self, 'kerasmodel') or sub_batch_size_update:
-                self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,sub_batch_size=sub_batch_size,model=self)
+                self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,context_size=self.keras_syn1_index_size,code_dim=vocab_size,sub_batch_size=sub_batch_size,model=self)
                 
             #print self.kerasmodel.predict({'index':np.array([[0,0],[1,0],[1,1]]),'point':np.array([[0,1],[1,0],[2,1]])})
             #self.kerasmodel.fit({'index':np.array([[0,0],[1,0],[1,1]]),'point':np.array([[0,1],[1,0],[2,1]]),'code':np.array([[0,1],[1,1],[1,1]])}, nb_epoch=1, verbose=1)
@@ -409,8 +450,9 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             
             #wv0=np.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
             #wv0=self.syn0
-            self.kerasmodel.nodes['embedding'].set_weights([np.copy(self.syn0)])
-            self.kerasmodel.nodes['embedpoint'].set_weights([np.copy(self.syn1)])
+            self.kerasmodel.nodes['embedding'].set_weights([self.syn0])
+            #self.kerasmodel.nodes['embedding'].set_weights([np.copy(self.syn0)])
+            #self.kerasmodel.nodes['embedpoint'].set_weights([np.copy(self.syn1)])
             self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
             
             # for n in range(self.iter):
@@ -429,7 +471,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             
             #super(Doc2Vec, self).reset_from(other_model)
   
-            self.syn0=np.copy(self.kerasmodel.nodes['embedding'].get_weights()[0])
+            #self.syn0=np.copy(self.kerasmodel.nodes['embedding'].get_weights()[0])
+            self.syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
             #self.syn1=np.copy(self.kerasmodel.nodes['embedpoint'].get_weights()[0])
             #super(Word2VecKeras,self).syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
             #print 'inner1',np.linalg.norm(wv0-self.syn0)
@@ -443,16 +486,19 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             samples_per_epoch=int(sum(map(len,sentences)))
             #samples_per_epoch=max(1,int(self.iter*self.window*2*sum(map(len,sentences))/sub_batch_size))
             if not hasattr(self, 'kerasmodel'):
-                self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,model=self,cbow_mean=self.cbow_mean)
+                self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,context_size=self.keras_syn1_index_size,code_dim=vocab_size,model=self,cbow_mean=self.cbow_mean)
 
             #sys.exit()
 
+            gen=train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size)
             #wv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
-            self.kerasmodel.fit_generator(train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size),samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
+            self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
 
-            #count =0
-            # for g in train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size):
+            # count =0
+            # for g in gen:
+            #     print g
             #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+            #     sys.exit()
             #     count +=1
             #     if count > self.iter * samples_per_epoch/batch_size :
             #         break
@@ -473,18 +519,17 @@ if __name__ == "__main__":
     
     v_iter=1
     v_size=5
-    sg_v=1
+    sg_v=0
     topn=4
-    hs=1
-    negative=0
-
+    # hs=1
+    # negative=0
+    hs=0
+    negative=5
     
-    
-    
 
 
-    vs1 = gensim.models.word2vec.Word2Vec(sents,hs=1,negative=0,sg=sg_v,size=v_size,iter=v_iter)
-    vsk1 = Word2VecKeras(sents,hs=1,negative=0,sg=sg_v,size=v_size,iter=v_iter)
+    vs1 = gensim.models.word2vec.Word2Vec(sents,hs=hs,negative=negative,sg=sg_v,size=v_size,iter=v_iter)
+    vsk1 = Word2VecKeras(sents,hs=hs,negative=negative,sg=sg_v,size=v_size,iter=v_iter)
     print 'compare',vsk1.compare_w2v(vs1)
     vsk1.iter=20
     vsk1.train(sents,batch_size=100,sub_batch_size=64)
@@ -494,7 +539,7 @@ if __name__ == "__main__":
     print( vs1.most_similar('the', topn=topn))
     print( vsk1.most_similar('the', topn=topn))
 
-    #sys.exit()
+    sys.exit()
 
     
     
