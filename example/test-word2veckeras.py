@@ -18,7 +18,7 @@ input_file = 'test.txt'
 sents=gensim.models.word2vec.LineSentence(input_file)
 
 v_iter=1
-v_size=100
+v_size=5
 sg_v=1
 topn=4
 
@@ -37,17 +37,21 @@ print np.linalg.norm(vs1.syn0-vsk1.syn0),compare_w2v(vs1,vsk1)
 
 
 from nltk.corpus import brown
-brown_sents=list(brown.sents())[:2000]
-#brown_sents=list(brown.sents())
+#brown_sents=list(brown.sents())[:2000]
+brown_sents=list(brown.sents())
 
-brc = gensim.models.word2vec.Word2Vec(brown_sents,hs=1,negative=0,sg=sg_v,iter=1)
-print brc.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
-ns=[1,2,5,10,20]
-for n in ns :
-    print n
-    brck = Word2VecKeras(brown_sents,hs=1,negative=0,iter=n,sg=sg_v)
-    print compare_w2v(brc,brck)
-    print brck.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
+#for sg_v in [1,0]:
+for sg_v in [0]:    
+    print sg_v
+    brc = gensim.models.word2vec.Word2Vec(brown_sents,hs=1,negative=0,sg=sg_v,iter=1)
+    print brc.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
+    #ns=[1,2,5,10,20]
+    ns=[100]
+    for n in ns :
+        print n
+        brck = Word2VecKeras(brown_sents,hs=1,negative=0,iter=n,sg=sg_v)
+        print compare_w2v(brc,brck)
+        print brck.most_similar_cosmul(positive=['she', 'him'], negative=['he'], topn=topn)
     
     
 
