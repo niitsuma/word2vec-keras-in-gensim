@@ -308,8 +308,6 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
               batch_size=128 #128, #512 #256
               ,sub_batch_size=128 #16 #32 #128 #128  #256 #128 #512 #256 #1
               ):
-        print 'Doc2VecKeras.train'
-
         if self.negative>0 and self.hs :
             self.keras_context_negative_base_index=len(self.vocab)
             self.keras_context_index_size=len(self.vocab)*2
@@ -342,7 +340,6 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
             word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
         if self.negative > 0:
             word_context_size_max += self.negative + 1
-        print 'word_context_size_max',word_context_size_max
 
         self.batch_size=batch_size
         batch_size=batch_size
