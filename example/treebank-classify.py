@@ -8,7 +8,7 @@ import gensim
 from word2veckeras.doc2veckeras import SentenceClassifier,Doc2VecClassifier
 from word2veckeras.treebank import TreeBank
 
-treebank=TreeBank()
+treebank=TreeBank('./trees')
 Xtest,Ytest=treebank.sents_labels('test',only_root=False,pos_neg_label=False)
 
 X,Y        =treebank.sents_labels('train',only_root=False,pos_neg_label=False)

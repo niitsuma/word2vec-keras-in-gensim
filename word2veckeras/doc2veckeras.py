@@ -39,33 +39,55 @@ from word2veckeras import train_sg_pair,train_cbow_pair,queue_to_list
 
 
 def train_batch_dbow(model,
-                     docs, alpha,
-                     work=None,
-                     train_words=False, learn_doctags=True, learn_words=True, learn_hidden=True,
-                     word_vectors=None, word_locks=None, doctag_vectors=None, doctag_locks=None,
-                     batch_size=100):
+                     docs,
+                     #alpha=None,
+                     #work=None,
+                     #train_words=False, learn_doctags=True, learn_words=True, learn_hidden=True,
+                     #word_vectors=None, word_locks=None, doctag_vectors=None, doctag_locks=None,
+                     sub_batch_size=256,batch_size=256
+                     ):
     #print 'train_batch_dbow'
+    # batch_count=0
+    # train_x0=[[0]]*batch_size
+    # train_x1=[[0]]*batch_size
+    # train_y=[[0]]*batch_size
     batch_count=0
-    train_x0=[[0]]*batch_size
-    train_x1=[[0]]*batch_size
-    train_y=[[0]]*batch_size
+    sub_batch_count=0
+    train_x0 =np.zeros((batch_size,sub_batch_size),dtype='int32')
+    train_x1 =np.zeros((batch_size,sub_batch_size),dtype='int32')
+    train_y  =np.zeros((batch_size,sub_batch_size),dtype='int8')
     while 1:
         for doc in docs:
             for doctag_index in doc.tags:
                 for word in doc.words:
-                    xy=train_sg_pair(model, word, doctag_index, alpha, learn_vectors=learn_doctags,
-                              learn_hidden=learn_hidden, context_vectors=doctag_vectors,
-                              context_locks=doctag_locks)
-                    if xy !=None:
-                        (x0,x1,y)=xy
-                        #print xy
-                        train_x0[batch_count]=[x0]
-                        train_x1[batch_count]=x1
-                        train_y[batch_count]=y
-                        batch_count += 1
-                        if batch_count >= batch_size :
-                            yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
-                            batch_count=0
+                    xy_gen=train_sg_pair(model, word, doctag_index,
+                                         # alpha, learn_vectors=learn_doctags,
+                                         # learn_hidden=learn_hidden, context_vectors=doctag_vectors,
+                                         # context_locks=doctag_locks
+                                         )
+                    for xy in xy_gen :
+                        if xy !=None:
+                            #print xy
+                            (x0,x1,y)=xy
+                            train_x0[batch_count][sub_batch_count]=x0
+                            train_x1[batch_count][sub_batch_count]=x1
+                            train_y[batch_count][sub_batch_count]=y
+                            sub_batch_count += 1
+                            if sub_batch_count >= sub_batch_size :
+                                batch_count += 1
+                                sub_batch_count=0
+                            if batch_count >= batch_size :
+                                #yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
+                                yield { 'index':train_x0, 'point':train_x1, 'code':train_y}
+                                batch_count=0
+                                    
+                            # train_x0[batch_count]=[x0]
+                            # train_x1[batch_count]=x1
+                            # train_y[batch_count]=y
+                            # batch_count += 1
+                            # if batch_count >= batch_size :
+                            #     yield { 'index':np.array(train_x0), 'point':np.array(train_x1), 'code':np.array(train_y)}
+                            #     batch_count=0
 
                             
 def train_batch_dm_xy_generator(model, docs):
@@ -82,18 +104,14 @@ def train_batch_dm_xy_generator(model, docs):
             word2_indexes = [word2.index for pos2, word2 in window_pos if pos2 != pos]
                 
             xy_gen=train_cbow_pair(model, word, word2_indexes) #, l1=None, alpha=None,learn_vectors=False, learn_hidden=learn_hidden)
-            xy_gen=train_cbow_pair(model, word , word2_indices , None, None)
+            #xy_gen=train_cbow_pair(model, word , word2_indexes , None, None)
             x2=doctag_indexes
             for xy in xy_gen:
                 if xy !=None:
                     yield [xy[0],x2,xy[1],xy[2]]
                     #yield xy
 
-
-
-            
-                           
-def train_batch_dm(model, docs,batch_size=100):
+def train_batch_dm(model, docs,batch_size=100,sub_batch_size=1,):
     w_len_queue_dict={}
     w_len_queue=[]
     while 1:
@@ -146,10 +164,13 @@ def train_document_dm_concat_xy_generator(model, docs):
             #word_context_len = len(word_context_indexes)
             #print word_context_len
             predict_word = model.vocab[model.index2word[padded_document_indexes[pos]]]
-            xy = train_cbow_pair(model, predict_word, word_context_indexes)
-            x2=doctag_indexes
-            xy1=[xy[0],x2,xy[1],xy[2]]
-            yield xy1
+            xy_gen = train_cbow_pair(model, predict_word, word_context_indexes)
+            for xy in xy_gen:
+                if xy !=None:
+                    #yield [xy[0],x2,xy[1],xy[2]]
+                    x2=doctag_indexes
+                    xy1=[xy[0],x2,xy[1],xy[2]]
+                    yield xy1
  
 def train_document_dm_concat(model, docs,batch_size=100):
     batch_count=0
@@ -168,175 +189,179 @@ def train_document_dm_concat(model, docs,batch_size=100):
                 batch_count=0
                       
 
-def build_keras_model_dbow(index_size,vector_size,vocab_size,code_dim,learn_doctags=True, learn_words=True, learn_hidden=True,model=None):
-    kerasmodel = Graph()
-    kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
-    kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
+def build_keras_model_dbow(index_size,vector_size,
+                           #vocab_size,
+                           context_size,
+                           sub_batch_size=1,
+                           doctag_vectors=None,
+                           hidden_vectors=None,
+                           learn_doctags=True,
+                           learn_hidden=True,
+                           model=None,
+                           ):
+
+    """
+    >>> index_size=3
+    >>> vector_size=2
+    >>> context_siz=3
+    >>> sub_batch_size=2
+    >>> doctag_vectors=np.array([[-1.1,2.2],[-3.2,-4.3],[-1.1,-1.4]],'float32')
+    >>> hidden_vectors=np.array([[-1,2],[3,4],[5,6]],'float32')
+    >>> kerasmodel=build_keras_model_dbow(index_size=3,vector_size=2,context_size=3,sub_batch_size=2,doctag_vectors=doctag_vectors,hidden_vectors=hidden_vectors)
+    >>> ind=[[0,1],[1,0]]
+    >>> ipt=[[0,1],[1,2]]
+    >>> tmp1=kerasmodel.predict({'index':np.array(ind),'point':np.array(ipt)})['code']
+    >>> tmp2=np.array([np.sum(doctag_vectors[ind[i]]*hidden_vectors[ipt[i]], axis=1) for i in range(2)])
+    >>> np.linalg.norm(1/(1+np.exp(-tmp2))-tmp1) < 0.001
+    True
+    """
     
-    kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
-
-    kerasmodel.add_node(Embedding(index_size, vector_size, input_length=1),name='embedding', input='index')
-    kerasmodel.add_node(Flatten(),name='embedflatten',input='embedding')
-    kerasmodel.add_node(Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),weights=[model.syn1.T,np.zeros((code_dim))]), name='sigmoid', input='embedflatten')
-    kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
+    kerasmodel = Graph()
+    kerasmodel.add_input(name='point' , input_shape=(sub_batch_size,), dtype=int)
+    kerasmodel.add_input(name='index' , input_shape=(sub_batch_size,), dtype=int)
+    if hidden_vectors is None :        
+        kerasmodel.add_node(Embedding(context_size, vector_size, input_length=sub_batch_size, ),name='embedpoint', input='point')
+    else:
+        kerasmodel.add_node(Embedding(context_size, vector_size, input_length=sub_batch_size, weights=[hidden_vectors]),name='embedpoint', input='point')
+    if doctag_vectors is None :
+        kerasmodel.add_node(Embedding(index_size  , vector_size, input_length=sub_batch_size, ),name='embedindex' , input='index')
+    else:
+        kerasmodel.add_node(Embedding(index_size  , vector_size, input_length=sub_batch_size, weights=[doctag_vectors]),name='embedindex' , input='index')
+    kerasmodel.add_node(Lambda(lambda x:x.sum(2))   , name='merge',inputs=['embedindex','embedpoint'], merge_mode='mul')
+    kerasmodel.add_node(Activation('sigmoid'), name='sigmoid', input='merge')
+    kerasmodel.add_output(name='code',input='sigmoid')
     kerasmodel.compile('rmsprop', {'code':'mse'})
-
     return kerasmodel
 
 
 def build_keras_model_dm(index_size,vector_size,vocab_size,
-                         code_dim,
+                         context_size,
+                         maxwords,
                          cbow_mean=False,
                          learn_doctags=True, learn_words=True, learn_hidden=True,
                          model=None ,
-                         word_vectors=None,doctag_vectors=None,hidden_vectors=None
+                         word_vectors=None,doctag_vectors=None,hidden_vectors=None,
+                         sub_batch_size=1
                          ):
- 
+    """
+    >>> word_vectors=np.array([[1,2],[3,4],[5,6]])
+    >>> doctag_vectors=np.array([[10,20],[30,40]])
+    >>> hidden_vectors=np.array([[1,0],[0,1]])
+    >>> sub_batch_size=2
+    >>> kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,context_size=2,maxwords=2,sub_batch_size=sub_batch_size,word_vectors=word_vectors,doctag_vectors=doctag_vectors,hidden_vectors=hidden_vectors, learn_words=True )
+    >>> ind=[[0],[1]]
+    >>> iwd=[[1,0],[1,1]]
+    >>> ipt=[[1,0],[0,1]]
+    >>> tmp1=kerasmodel.predict({'index':np.array(ind),'iword':np.array(iwd),'point':np.array(ipt)})['code']
+    >>> tmp2=np.array([ [(word_vectors[iwd[i]].sum(0)+doctag_vectors[i]).dot(hidden_vectors[j]) for j in ipt[i] ] for i in range(2)])
+    >>> np.linalg.norm(1/(1+np.exp(-tmp2))-tmp1) < 0.001
+    True
+    """ 
     kerasmodel = Graph()
 
-    kerasmodel.add_input(name='iword' , input_shape=(1,), dtype=int)
+    kerasmodel.add_input(name='index',input_shape=(1,)     , dtype=int)
+    if doctag_vectors is None :        
+        kerasmodel.add_node(Embedding(index_size,   vector_size,trainable=learn_doctags,input_length=1                              ),name='embedindex', input='index')
+    else:
+        kerasmodel.add_node(Embedding(index_size,   vector_size,trainable=learn_doctags,input_length=1     ,weights=[doctag_vectors]),name='embedindex', input='index')
+    kerasmodel.add_input(name='iword',input_shape=(maxwords,), dtype=int)
+
     if word_vectors is None :
-        kerasmodel.add_node(Embedding(vocab_size, vector_size,trainable=learn_words),name='embedword', input='iword')
+        kerasmodel.add_node(Embedding(vocab_size,   vector_size,trainable=learn_words  ,input_length=maxwords                         ),name='embedword', input='iword')
     else:
-        kerasmodel.add_node(Embedding(vocab_size, vector_size,trainable=learn_words,weights=[word_vectors]),name='embedword', input='iword')        
+        kerasmodel.add_node(Embedding(vocab_size,   vector_size,trainable=learn_words  ,input_length=maxwords,weights=[word_vectors  ]),name='embedword', input='iword')
 
+    kerasmodel.add_input(name='point',input_shape=(sub_batch_size,)     , dtype=int)
+    if hidden_vectors is None :
+        kerasmodel.add_node(Embedding(context_size, vector_size,trainable=learn_hidden ,input_length=sub_batch_size                          ),name='embedpoint', input='point')
+    else:
+        kerasmodel.add_node(Embedding(context_size, vector_size,trainable=learn_hidden ,input_length=sub_batch_size  ,weights=[hidden_vectors]),name='embedpoint', input='point')
         
     if cbow_mean:
-        kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='averageword',input='embedword')
+        kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)), name='merge',inputs=['embedindex','embedword'], merge_mode='concat', concat_axis=1)
     else:
-        kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='averageword',input='embedword')
+        kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)), name='merge',inputs=['embedindex','embedword'], merge_mode='concat', concat_axis=1)
 
-    kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
-    if doctag_vectors is None :
-        kerasmodel.add_node(Embedding(index_size, vector_size,trainable=learn_doctags),name='embedindex', input='index')
-    else:
-        kerasmodel.add_node(Embedding(index_size, vector_size,trainable=learn_doctags,weights=[doctag_vectors]),name='embedindex', input='index')
-
-    
-    if cbow_mean:
-        kerasmodel.add_node(Lambda(lambda x:x.mean(1),output_shape=(vector_size,)),name='averageindex',input='embedindex')
-    else:
-        kerasmodel.add_node(Lambda(lambda x:x.sum(1),output_shape=(vector_size,)),name='averageindex',input='embedindex')
-
-    # ### This calcuation diffrent from original gensim. Because of this error https://github.com/fchollet/keras/issues/1474
-    kerasmodel.add_node(Lambda(lambda x:x[0]+x[1],output_shape=(vector_size,)),name='average',inputs=['averageindex','averageword'])
-
-    kerasmodel.add_input(name='point' , input_shape=(1,), dtype=int)
-    if hidden_vectors is None:        
-        kerasmodel.add_node(Embedding(code_dim, vector_size, input_length=1,),name='embedpoint', input='point')
-    else:
-        kerasmodel.add_node(Embedding(code_dim, vector_size, input_length=1,weights=[hidden_vectors]),name='embedpoint', input='point')
-        
-    kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',inputs=['average','embedpoint'], merge_mode='dot',dot_axes=-1)
-    
-
-        
-
-
-    # kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
-    # kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
-
-    # kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
+    kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',inputs=['merge','embedpoint'], merge_mode='dot',dot_axes=-1)
+    #kerasmodel.add_node(Lambda(lambda x:x), name='sigmoid',inputs=['merge','embedpoint'], merge_mode='dot',dot_axes=-1)
     kerasmodel.add_output(name='code',input='sigmoid')
-
     kerasmodel.compile('rmsprop', {'code':'mse'})
-    #print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] )  })
     
     return kerasmodel
     
     
-def build_keras_model_dm_concat(index_size,vector_size,vocab_size,code_dim,window_size,
+def build_keras_model_dm_concat(index_size,vector_size,vocab_size,
+                                #code_dim,
+                                context_size,
+                                window_size,
                                 learn_doctags=True, learn_words=True, learn_hidden=True,
                                 model=None ,
                                 word_vectors=None,doctag_vectors=None,hidden_vectors=None
                                 ):
+    """
+    >>> syn0=np.array([[1,-2],[-1,2],[2,-2]],'float32')
+    >>> word_vectors=syn0
+    >>> syn1=np.array([[-1,2,1,-5,4,1,-2,3,-4,5],[3,4,-4,1,-2,6,-7,8,9,1],[5,-6,-8,7,6,-1,2,-3,4,5]],'float32')
+    >>> hidden_vectors=syn1
+    >>> doctag_vectors=np.array([[-1.1,2.2],[-3.2,-4.3],[-1.1,-1.4]],'float32')
+    >>> kerasmodel=build_keras_model_dm_concat(index_size=3,vector_size=2,vocab_size=3,context_size=3,window_size=2,word_vectors=word_vectors,doctag_vectors=doctag_vectors,hidden_vectors=hidden_vectors)
+    >>> ind=[[0],[1]]
+    >>> iwd=[[0,0,1,2],[1,1,2,0]]
+    >>> ipt=[[0],[1]]
+    >>> tmp1=kerasmodel.predict({'index':np.array(ind),'iword':np.array(iwd),'point':np.array(ipt)})['code']
+    >>> tmp2=np.array([[np.vstack((doctag_vectors[ind[i]],word_vectors[iwd[i]])).flatten().dot(hidden_vectors[j]) for j in ipt[i] ] for i in range(2)])
+    >>> np.linalg.norm(1/(1+np.exp(-tmp2))-tmp1) < 0.001
+    True
+    """
 
     kerasmodel = Graph()
-
     kerasmodel.add_input(name='iword' , input_shape=(1,), dtype=int)
     kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
-
-
-    # embedword=Embedding(vocab_size, vector_size,
-    #                     input_length=2*window_size,
-    #                     trainable=learn_words,
-    #                     #weights=[np.array([[1,2],[3,4],[5,6]],'float32')]
-    #                     weights=[model.syn0]
-    #                     )
-    kerasmodel.add_node(
-        Embedding(vocab_size, vector_size,
-                  input_length=2*window_size,
-                  trainable=learn_words,
-                  weights=[model.syn0]
-                  #weights=[np.array([[1,2],[3,4],[5,6]],'float32')]
-                  ),
-        #embedword,
-        name='embedword', input='iword')
-
-    # embedindex=Embedding(index_size, vector_size,
-    #                      input_length=1,
-    #                      trainable=learn_doctags,
-    #                      #weights=[np.array([[10,20],[30,40]],'float32')]
-    #                      #weights=[model.docvecs.doctag_syn0]
-    #                      )
+    if word_vectors is None:
+        kerasmodel.add_node(Embedding(vocab_size, vector_size,input_length=2*window_size,trainable=learn_words,),name='embedword', input='iword')
+    else:
+        kerasmodel.add_node(Embedding(vocab_size, vector_size,input_length=2*window_size,trainable=learn_words,weights=[word_vectors]),name='embedword', input='iword')
     if doctag_vectors is None:
         kerasmodel.add_node(Embedding(index_size, vector_size,input_length=1,trainable=learn_doctags,), name='embedindex', input='index')
     else:
         kerasmodel.add_node(Embedding(index_size, vector_size,input_length=1,trainable=learn_doctags,weights=[doctag_vectors]), name='embedindex', input='index')
 
-    kerasmodel.add_node(Flatten(),name='embedconcat',inputs=['embedindex','embedword'],merge_mode='concat', concat_axis=1)
+    kerasmodel.add_input(name='point',input_shape=(1,)     , dtype=int)
+    if hidden_vectors is None:
+        kerasmodel.add_node(Embedding(context_size, (2*window_size+1)*vector_size,input_length=1, trainable=learn_hidden,),name='embedpoint', input='point')
+    else:
+        kerasmodel.add_node(Embedding(context_size, (2*window_size+1)*vector_size,input_length=1, trainable=learn_hidden,weights=[hidden_vectors]),name='embedpoint', input='point')
 
-    # if model.hs:
-    #     hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
-    #                  trainable=learn_hidden,
-    #                  weights=[model.syn1.T,np.zeros((code_dim))]
-    #                  )
-    # else:
-    #     hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
-    #                  trainable=learn_hidden,
-    #                  weights=[model.syn1neg.T,np.zeros((code_dim))]
-    #                  )
-        
-    
-    # hidden=Dense(code_dim, activation='sigmoid',b_constraint = keras.constraints.maxnorm(0),
-    #                           trainable=learn_hidden
-    #                           )
-    
-    kerasmodel.add_node(
-        Dense(code_dim, activation='sigmoid', b_constraint = keras.constraints.maxnorm(0),
-              #input_dim=(6,),
-              trainable=learn_hidden,
-              weights=[model.syn1.T,np.zeros((code_dim))]
-              ),
-        #hidden,
-        name='sigmoid',
-        input='embedconcat'
-        #inputs=['flattenindex','flattenword'],merge_mode='concat'
-        )
-
-    kerasmodel.add_input(name='point', input_shape=(code_dim,), dtype=REAL)
-    kerasmodel.add_node(kerasmodel.inputs['point'],name='pointnode')
-
-
-    kerasmodel.add_output(name='code',inputs=['sigmoid','pointnode'], merge_mode='mul')
-
+    kerasmodel.add_node(Flatten(),name='merge',inputs=['embedindex','embedword'],merge_mode='concat', concat_axis=1)
+    kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',inputs=['merge','embedpoint'], merge_mode='dot',dot_axes=-1)
+    # kerasmodel.add_node(Reshape((1,(2*window_size+1)*vector_size,)),name='merge',inputs=['embedindex','embedword'],merge_mode='concat', concat_axis=1)
+    # kerasmodel.add_node(Lambda(lambda x:x[:,1:].dot(x[:,0].T)), name='contextmul',inputs=['merge','embedpoint'], merge_mode='concat', concat_axis=1)
+    # kerasmodel.add_node(Activation('sigmoid'), name='sigmoid',input='contextmul')
+    kerasmodel.add_output(name='code',input='sigmoid')
     kerasmodel.compile('rmsprop', {'code':'mse'})
-    #print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] )  }) 
     return kerasmodel
+
         
 class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
-
-    def train(self, docs=None, batch_size=800,
+    def train(self, docs=None,
+              #batch_size=800,
               learn_doctags=True, learn_words=True, learn_hidden=True,iter=None,
+              batch_size=128 #128, #512 #256
+              ,sub_batch_size=128 #16 #32 #128 #128  #256 #128 #512 #256 #1
               ):
-        #print 'Doc2VecKeras.train'
+        print 'Doc2VecKeras.train'
 
         if self.negative>0 and self.hs :
-            self.keras_syn1_negative_base_index=len(self.vocab)
-            self.keras_syn1_index_size=len(self.vocab)*2
+            self.keras_context_negative_base_index=len(self.vocab)
+            self.keras_context_index_size=len(self.vocab)*2
+            self.keras_syn1=np.vstack((self.syn1,self.syn1neg))
         else:
-            self.keras_syn1_negative_base_index=0
-            self.keras_syn1_index_size=len(self.vocab)
+            self.keras_context_negative_base_index=0
+            self.keras_context_index_size=len(self.vocab)
+            if self.hs :
+                self.keras_syn1=self.syn1
+            else:
+                self.keras_syn1=self.syn1neg
 
         self.neg_labels = []
         if self.negative > 0:
@@ -353,74 +378,123 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
         vocab_size=len(self.vocab)
         index_size=len(self.docvecs)
 
+        word_context_size_max=0
+        if self.hs :
+            word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
+        if self.negative > 0:
+            word_context_size_max += self.negative + 1
+        print 'word_context_size_max',word_context_size_max
+
         #batch_size=800 ##optimized 1G mem video card
         #batch_size=3200
+        # batch_size=3
+        # sub_batch_size=2
+        
         self.batch_size=batch_size
         batch_size=batch_size
-        samples_per_epoch=int(self.window*2*sum(map(len,docs)))
-        #print 'samples_per_epoch',samples_per_epoch
+        
+        #samples_per_epoch=int(self.window*2*sum(map(len,docs)))
         
         #print 'Doc2VecKeras.train sg=',self.sg,learn_words,batch_size,samples_per_epoch/batch_size
         
-        if self.hs and self.negative>0 :
-            raise ValueError("both using hs and negative not implemented") 
+        # if self.hs and self.negative>0 :
+        #     raise ValueError("both using hs and negative not implemented") 
         
         if self.sg:
-            self.kerasmodel=build_keras_model_dbow(index_size=index_size,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,
-                                                   model=self,learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden)
-   
-            #dv0=copy.copy(self.kerasmodel.nodes['embedding'].get_weights()[0][0])
+            print 'dbow'
+            #print 'window',self.window
+            #samples_per_epoch=int(word_context_size_max*self.window*2*sum(map(len,docs))/sub_batch_size)
+            samples_per_epoch=max(1,int((word_context_size_max*self.window*2*sum(map(len,docs)))/(sub_batch_size)))
+
+            print 'samples_per_epoch',samples_per_epoch
+            self.kerasmodel=build_keras_model_dbow(index_size=index_size,vector_size=self.vector_size,
+                                                   #vocab_size=vocab_size,code_dim=vocab_size,
+                                                   context_size=self.keras_context_index_size,
+                                                   model=self,
+                                                   learn_doctags=learn_doctags,
+                                                   #learn_words=learn_words,
+                                                   learn_hidden=learn_hidden,
+                                                   #word_vectors=self.syn0,
+                                                   hidden_vectors=self.keras_syn1,
+                                                   doctag_vectors=self.docvecs.doctag_syn0,
+                                                   sub_batch_size=sub_batch_size
+                                                   )
+            gen=train_batch_dbow(self, docs, sub_batch_size=sub_batch_size,batch_size=batch_size)
+            #dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
+            #gen=train_batch_dbow(self, docs, self.alpha, batch_size=batch_size)
+            self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
+
+            #self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0]
+            #self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
+
+
+            #self.syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0]
             
             # self.kerasmodel.fit_generator(
             #     train_batch_dbow(self, docs, self.alpha, batch_size=batch_size),
             #     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
-            count =0
-            for g in train_batch_dbow(self, docs, self.alpha, batch_size=batch_size):
-                self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
-                count +=1
-                if count > self.iter * samples_per_epoch/batch_size :
-                    break
+            # count =0
+            # for g in train_batch_dbow(self, docs, self.alpha, batch_size=batch_size):
+            #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+            #     count +=1
+            #     if count > self.iter * samples_per_epoch/batch_size :
+            #         break
 
             # print dv0
-            # print self.kerasmodel.nodes['embedding'].get_weights()[0][0]
+            # print self.kerasmodel.nodes['embedindex'].get_weights()[0][0]
             # sys.exit()
-            self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+            
+            # self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0])
 
 
-            self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedding'].get_weights()[0]
-            if self.hs:
-                self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
-            if self.negative>0:
-                self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+            # self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0]
+            # if self.hs:
+            #     self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0])
+            # if self.negative>0:
+            #     self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0])
 
-            self.kerasmodel_infer=build_keras_model_dbow(index_size=1,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,
-                                                   model=self,learn_doctags=True, learn_words=False, learn_hidden=False
-                                                   #hidden_vectors=self.syn1.T,
-                                                         )
+            # self.kerasmodel_infer=build_keras_model_dbow(index_size=1,vector_size=self.vector_size,vocab_size=vocab_size,code_dim=vocab_size,
+            #                                        model=self,learn_doctags=True, learn_words=False, learn_hidden=False
+            #                                        #hidden_vectors=self.syn1,
+            #                                              )
 
             
         else:
             if self.dm_concat:
                 #print 'dm_concat'
                 #print 'window',self.window
-                self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,vocab_size,self.window,
+                samples_per_epoch=int(word_context_size_max*sum(map(len,docs)))
+                #print 'samples_per_epoch',samples_per_epoch
+
+                
+                self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,
+                                                            #vocab_size,
+                                                            #self.keras_context_index_size,
+                                                            context_size=self.keras_context_index_size,
+                                                            window_size=self.window,
                                                             model=self,
                                                             learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden,
+                                                            word_vectors=self.syn0,
+                                                            hidden_vectors=self.keras_syn1,
                                                             doctag_vectors=self.docvecs.doctag_syn0
                                                             )
+                gen= train_document_dm_concat(self, docs, batch_size=batch_size)
+
 
                 # wv0=copy.copy(self.kerasmodel.nodes['embedword'].get_weights()[0][0])
                 # dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
-                
-                self.kerasmodel.fit_generator(
-                    train_document_dm_concat(self, docs, batch_size=batch_size),
-                    samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+                self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
+
+                # self.kerasmodel.fit_generator(
+                #     train_document_dm_concat(self, docs, batch_size=batch_size),
+                #     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
                 
                 # count =0
-                # for g in train_document_dm_concat(self, docs, batch_size=batch_size):
+                # for g in gen:
+                #     print g
                 #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
                 #     count +=1
-                #     if count > self.iter * samples_per_epoch/batch_size :
+                #     if count > 2 : #self.iter * samples_per_epoch/batch_size :
                 #         break
 
                 # print wv0
@@ -429,76 +503,93 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
                 # print self.kerasmodel.nodes['embedindex'].get_weights()[0][0]
                 # sys.exit()
                 
-                self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
+                #self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
-                if self.hs:
-                    self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
-                if self.negative>0:
-                    self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+                # if self.hs:
+                #     self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+                # if self.negative>0:
+                #     self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
 
 
-                self.kerasmodel_infer=build_keras_model_dm_concat(1,self.vector_size,vocab_size,vocab_size,self.window,
-                                                            model=self,
-                                                            learn_doctags=True, learn_words=False, learn_hidden=False
-                                                            )
+                # self.kerasmodel_infer=build_keras_model_dm_concat(1,self.vector_size,vocab_size,vocab_size,self.window,
+                #                                             model=self,
+                #                                             learn_doctags=True, learn_words=False, learn_hidden=False
+                #                                             )
                 
             else:
                 #print 'dm'
-                self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,vocab_size, model=self,
+                samples_per_epoch=int(word_context_size_max*sum(map(len,docs)))
+                #print 'samples_per_epoch',samples_per_epoch
+                self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,
+                                                     self.keras_context_index_size,
+                                                     #vocab_size,
+                                                     maxwords=self.window*2+1,
+                                                     model=self,
                                                      learn_doctags=learn_doctags, learn_words=learn_words, learn_hidden=learn_hidden,
                                                      word_vectors=self.syn0,
                                                      doctag_vectors=self.docvecs.doctag_syn0,
-                                                     hidden_vectors=self.syn1.T,
-                                                     cbow_mean=self.cbow_mean,
+                                                     hidden_vectors=self.keras_syn1,
+                                                     cbow_mean=self.cbow_mean
                                                      )
 
                 #wv0=copy.copy(self.kerasmodel.nodes['embedword'].get_weights()[0][0])
                 #dv0=copy.copy(self.kerasmodel.nodes['embedindex'].get_weights()[0][0])
                 
                 count =0
-                # gn=train_batch_dm(self, docs, batch_size=batch_size)
+                gen=train_batch_dm(self, docs, batch_size=batch_size)
                 # count=0
-                # for g in gn:
+                # for g in gen:
                 #     print g
                 #     count +=1
                 #     if count >=2 :
                 #         sys.exit()
 
-                # print samples_per_epoch/batch_size
-                # sys.exit()
-                for g in train_batch_dm(self, docs, batch_size=batch_size):
-                    self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
-                    count +=1
-                    if count > self.iter * samples_per_epoch/batch_size :
-                        break
+                # # print samples_per_epoch/batch_size
+                # # sys.exit()
+                # for g in train_batch_dm(self, docs, batch_size=batch_size):
+                #     print g
+                #     self.kerasmodel.fit(g, nb_epoch=1, verbose=0)
+                #     count +=1
+                #     if count > self.iter * samples_per_epoch/batch_size :
+                #         break
                     
-                # self.kerasmodel.fit_generator(
-                #     train_batch_dm(self, docs, batch_size=batch_size),
-                #     samples_per_epoch=samples_per_epoch, nb_epoch=self.iter)
+                self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
 
                 # print wv0
                 # print self.kerasmodel.nodes['embedword'].get_weights()[0][0]
                 # print dv0
                 # print self.kerasmodel.nodes['embedindex'].get_weights()[0][0]
                 # sys.exit()
-                
-
-                                
-                self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0] 
+                #self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0]
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
-                if self.hs:
-                    self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
-                if self.negative>0:
-                    self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
 
-                self.kerasmodel_infer=build_keras_model_dm(1,self.vector_size,vocab_size,vocab_size, model=self,
-                                                           learn_doctags=True, learn_words=False, learn_hidden=False,
-                                                           word_vectors=self.syn0,
-                                                           #doctag_vectors=self.docvecs.doctag_syn0,
-                                                           hidden_vectors=self.syn1.T,
-                                                           cbow_mean=self.cbow_mean,
-                                                           )
                 
+                # if self.hs:
+                #     self.syn1=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+                # if self.negative>0:
+                #     self.syn1neg=(self.kerasmodel.nodes['sigmoid'].get_weights()[0]).T
+
+                # self.kerasmodel_infer=build_keras_model_dm(1,self.vector_size,vocab_size,vocab_size, model=self,
+                #                                            learn_doctags=True, learn_words=False, learn_hidden=False,
+                #                                            word_vectors=self.syn0,
+                #                                            #doctag_vectors=self.docvecs.doctag_syn0,
+                #                                            hidden_vectors=self.syn1.T,
+                #                                            cbow_mean=self.cbow_mean,
+                #                                            )
+        self.docvecs.doctag_syn0=self.kerasmodel.nodes['embedindex'].get_weights()[0]
+        if self.negative>0 and self.hs :
+            syn1tmp=self.kerasmodel.nodes['embedpoint'].get_weights()[0]
+            self.syn1=syn1tmp[0:len(self.vocab)]
+            self.syn1neg=syn1tmp[len(self.vocab):2*len(self.vocab)]
+        elif self.hs:
+            self.syn1=self.kerasmodel.nodes['embedpoint'].get_weights()[0]
+        else:
+            self.syn1neg=self.kerasmodel.nodes['embedpoint'].get_weights()[0]
+
+            
+            
+        
+
 
     def infer_vector_keras(self, doc_words, steps=10):
     #def infer_vector(self, doc_words, steps=15):        
@@ -722,18 +813,36 @@ class Doc2VecClassifier(SentenceClassifier):
 
     
             
-def debug_fit():            
-    kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,code_dim=2,
-                                    word_vectors=np.array([[1,2],[3,4],[5,6]]),
-                                    doctag_vectors=np.array([[10,20],[30,40]]),
-                                    hidden_vectors=np.array([[1,-1],[-1,1]]),
+def debug_fit():
+    word_vectors=np.array([[1,2],[3,4],[5,6]])
+    doctag_vectors=np.array([[10,20],[30,40]])
+    hidden_vectors=np.array([[1,0],[0,1]])
+    sub_batch_size=2
+    kerasmodel=build_keras_model_dm(index_size=2,vector_size=2,vocab_size=3,context_size=2,
+                                    maxwords=2,
+                                    sub_batch_size=sub_batch_size,
+                                    word_vectors=word_vectors,
+                                    doctag_vectors=doctag_vectors,
+                                    hidden_vectors=hidden_vectors,
                                     learn_words=True
                                     )
     
     #kerasmodel=build_keras_model_dm_concat(index_size=2,vector_size=2,vocab_size=3,code_dim=2)
     #print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,1],[1,1]] )  })
-    print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1],[0]] )  })
-    print 1.0/(1+math.exp(-(3+10-(4+20)) ))
+    print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[1,0],[1,1]]),'point':np.array([[1,0],[0,1]] )  })
+    tmp=[(word_vectors[[1,0]].sum(0)+doctag_vectors[0]).dot(hidden_vectors[i]) for i in [1,0] ]
+    print tmp #,1.0/(1+math.exp(tmp ))
+    tmp=[(word_vectors[[1,1]].sum(0)+doctag_vectors[1]).dot(hidden_vectors[i]) for i in [0,1] ]
+    print tmp #,1.0/(1+math.exp(tmp ))
+
+
+    print kerasmodel.predict({'index':np.array([[0],[1]]),'iword':np.array([[2,1],[0,2]]),'point':np.array([[1,0],[0,1]] )  })
+    tmp=[(word_vectors[[1,0]].sum(0)+doctag_vectors[0]).dot(hidden_vectors[i]) for i in [1,0] ]
+    print tmp #,1.0/(1+math.exp(tmp ))
+    tmp=[(word_vectors[[1,1]].sum(0)+doctag_vectors[1]).dot(hidden_vectors[i]) for i in [0,1] ]
+    print tmp #,1.0/(1+math.exp(tmp ))
+
+    
     sys.exit()
     def mygen():
         while 1:
@@ -765,10 +874,13 @@ def debug_fit():
     sys.exit()
     
 if __name__ == "__main__":
-
+    #debug_fit()
+    import doctest
+    doctest.testmod()
+    
     # test_SentenceClassifier()
-    debug_fit()
-    sys.exit()
+
+    #sys.exit()
     
     input_file = 'test.txt'
     doc1=gensim.models.doc2vec.TaggedLineDocument(input_file)
@@ -776,9 +888,16 @@ if __name__ == "__main__":
         doc_words1=d.words
         break;
     d_size=5
-    
-    dvdbowk1=Doc2VecKeras(doc1,size= d_size,dm=0,iter=3)
+    dvdbowk1=Doc2VecKeras(                doc1,size=d_size,dm=0,dm_concat=1,hs=0,negative=5,iter=1)
+    dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size=d_size,dm=0,dm_concat=1,hs=0,negative=5,iter=1)
+
+    #dvdbowk1=Doc2VecKeras(doc1,size= 5,dm=1,iter=1)
+    #dvdbowk1=Doc2VecKeras(doc1,size= 5,dm=1,dm_concat=1,window=2,iter=1)
+    print dvdbow1.docvecs[0]
     print dvdbowk1.docvecs[0]
+    sys.exit()
+    
+   
     dvdbow1=gensim.models.doc2vec.Doc2Vec(doc1,size= d_size,dm=0)
     print dvdbow1.docvecs[0]
 
