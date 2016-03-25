@@ -103,11 +103,8 @@ class TreeBank():
         return X,Y
 
 
-
-        
-
 if __name__ == "__main__":
-    treebank=TreeBank()
+    treebank=TreeBank('./trees')
     print treebank.tree_dev[:3]
     # lss=trees2label_sents(treebank.tree_dev[:3])
     # print lss[:3]
