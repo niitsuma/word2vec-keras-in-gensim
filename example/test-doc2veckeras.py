@@ -12,8 +12,9 @@ doc1=gensim.models.doc2vec.TaggedLineDocument(input_file)
 parameters = [{'size':[5],'dm':[0,1],'dm_concat':[0,1],'hs':[0,1],'negative':[0,5] }]
 from sklearn.grid_search import ParameterGrid
 for param in ParameterGrid(parameters):
-    if param['hs']==0 and param['negative']==0 :
+    if (param['hs']==0 and param['negative']==0) or (param['dm']==0 and param['dm_concat']==0) :
         continue
+    
     print param
     dvk=Doc2VecKeras(doc1,**param)
     dv =gensim.models.doc2vec.Doc2Vec(doc1,**param)

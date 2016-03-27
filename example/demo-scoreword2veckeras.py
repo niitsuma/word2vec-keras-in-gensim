@@ -3,6 +3,8 @@
 
 # Licensed under the GNU Affero General Public License, version 3 - http://www.gnu.org/licenses/agpl-3.0.html
 
+### ScoreWord2Vec stil has bug
+
 import sys
 
 import gensim

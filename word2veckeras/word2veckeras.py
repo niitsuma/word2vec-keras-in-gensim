@@ -108,7 +108,7 @@ def train_batch_sg(model, sentences, alpha=None, work=None,sub_batch_size=256,ba
 
 def build_keras_model_sg(index_size,vector_size,
                          context_size,
-                         code_dim,
+                         #code_dim,
                          sub_batch_size=256,
                          learn_vectors=True,learn_hidden=True,
                          model=None):
@@ -175,7 +175,11 @@ def train_batch_cbow(model, sentences, alpha=None, work=None, neu1=None,batch_si
                             'code':np.array(train[2])}
 
         
-def build_keras_model_cbow(index_size,vector_size,context_size,code_dim,sub_batch_size=1,model=None,cbow_mean=False):
+def build_keras_model_cbow(index_size,vector_size,
+                           context_size,
+                           #code_dim,
+                           sub_batch_size=1,
+                           model=None,cbow_mean=False):
  
     kerasmodel = Graph()
     kerasmodel.add_input(name='point' , input_shape=(sub_batch_size,), dtype=int)
@@ -251,6 +255,48 @@ def copy_word2vec_instance_from_to(w2v,w2v_to,sentences=None,documents=None):# ,
         #self.train(docs,learn_words=learn_words,**kwargs)
 
 
+def train_prepossess(model):
+    
+    vocab_size=len(model.vocab)
+
+    if model.negative>0 and model.hs :
+        model.keras_context_negative_base_index=len(model.vocab)
+        model.keras_context_index_size=len(model.vocab)*2
+        model.keras_syn1=np.vstack((model.syn1,model.syn1neg))
+    else:
+        model.keras_context_negative_base_index=0
+        model.keras_context_index_size=len(model.vocab)
+        if model.hs :
+            model.keras_syn1=model.syn1
+        else:
+            model.keras_syn1=model.syn1neg
+
+    model.neg_labels = []
+    if model.negative > 0:
+        # precompute negative labels optimization for pure-python training
+        model.neg_labels = np.zeros(model.negative + 1,dtype='int8')
+        model.neg_labels[0] = 1
+
+    trim_rule=None
+    if len(model.vocab) == 0 : #not hasattr(model, 'syn0'):
+        print 'build_vocab'
+        model.build_vocab(sentences, trim_rule=trim_rule)
+        #print model.syn0
+    
+
+    model.word_context_size_max=0
+    if model.hs :
+        model.word_context_size_max += max(len(model.vocab[w].point) for w in model.vocab if hasattr(model.vocab[w],'point'))
+    if model.negative > 0:
+        model.word_context_size_max += model.negative + 1
+
+    # sub_batch_size_update=False
+    # if hasattr(model,'sub_batch_size'):
+    #     if model.sub_batch_size != sub_batch_size :
+    #         sub_batch_size_update=True
+    #         model.sub_batch_size=sub_batch_size
+
+        
 class Word2VecKeras(gensim.models.word2vec.Word2Vec):
 
     def compare_w2v(self,w2v2):
@@ -261,40 +307,40 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
                batch_size=128 #512 #256
                ,sub_batch_size=16 #32 #128 #128  #256 #128 #512 #256 #1
               ):
+        train_prepossess(self)
+        
+        # if self.negative>0 and self.hs :
+        #     self.keras_context_negative_base_index=len(self.vocab)
+        #     self.keras_context_index_size=len(self.vocab)*2
+        #     self.keras_syn1=np.vstack((self.syn1,self.syn1neg))
+        # else:
+        #     self.keras_context_negative_base_index=0
+        #     self.keras_context_index_size=len(self.vocab)
+        #     if self.hs :
+        #         self.keras_syn1=self.syn1
+        #     else:
+        #         self.keras_syn1=self.syn1neg
 
-        if self.negative>0 and self.hs :
-            self.keras_context_negative_base_index=len(self.vocab)
-            self.keras_context_index_size=len(self.vocab)*2
-            self.keras_syn1=np.vstack((self.syn1,self.syn1neg))
-        else:
-            self.keras_context_negative_base_index=0
-            self.keras_context_index_size=len(self.vocab)
-            if self.hs :
-                self.keras_syn1=self.syn1
-            else:
-                self.keras_syn1=self.syn1neg
-
-        self.neg_labels = []
-        if self.negative > 0:
-            # precompute negative labels optimization for pure-python training
-            self.neg_labels = np.zeros(self.negative + 1,dtype='int8')
-            self.neg_labels[0] = 1
+        # self.neg_labels = []
+        # if self.negative > 0:
+        #     # precompute negative labels optimization for pure-python training
+        #     self.neg_labels = np.zeros(self.negative + 1,dtype='int8')
+        #     self.neg_labels[0] = 1
             
         
-        trim_rule=None
-        if len(self.vocab) == 0 : #not hasattr(self, 'syn0'):
-            print 'build_vocab'
-            self.build_vocab(sentences, trim_rule=trim_rule)
-            #print self.syn0
+        # trim_rule=None
+        # if len(self.vocab) == 0 : #not hasattr(self, 'syn0'):
+        #     print 'build_vocab'
+        #     self.build_vocab(sentences, trim_rule=trim_rule)
+        #     #print self.syn0
+        # word_context_size_max=0
+        # if self.hs :
+        #     word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
+        # if self.negative > 0:
+        #     word_context_size_max += self.negative + 1
+
+
         vocab_size=len(self.vocab)
-
-        word_context_size_max=0
-        if self.hs :
-            word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
-        if self.negative > 0:
-            word_context_size_max += self.negative + 1
-
-            
         
         sub_batch_size_update=False
         if hasattr(self,'sub_batch_size'):
@@ -308,7 +354,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             if not hasattr(self, 'kerasmodel') or sub_batch_size_update:
                 self.kerasmodel=build_keras_model_sg(index_size=vocab_size,vector_size=self.vector_size,
                                                      context_size=self.keras_context_index_size,
-                                                     code_dim=vocab_size,sub_batch_size=sub_batch_size,
+                                                     #code_dim=vocab_size,
+                                                     sub_batch_size=sub_batch_size,
                                                      model=self
                                                      )
                 
@@ -320,7 +367,8 @@ class Word2VecKeras(gensim.models.word2vec.Word2Vec):
             #samples_per_epoch=max(1,int(self.iter*self.window*2*sum(map(len,sentences))/sub_batch_size))
             if not hasattr(self, 'kerasmodel'):
                 self.kerasmodel=build_keras_model_cbow(index_size=vocab_size,vector_size=self.vector_size,
-                                                       context_size=self.keras_context_index_size,code_dim=vocab_size,
+                                                       context_size=self.keras_context_index_size,
+                                                       #code_dim=vocab_size,
                                                        model=self,cbow_mean=self.cbow_mean
                                                        )
             gen=train_batch_cbow(self, sentences, self.alpha, work=None,batch_size=batch_size)

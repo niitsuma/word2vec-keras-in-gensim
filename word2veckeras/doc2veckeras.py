@@ -35,7 +35,7 @@ from keras.objectives import mse
 from sklearn.base import BaseEstimator,RegressorMixin, ClassifierMixin
 from sklearn.linear_model import LogisticRegression,LogisticRegressionCV
 
-from word2veckeras import train_sg_pair,train_cbow_pair,queue_to_list
+from word2veckeras import train_sg_pair,train_cbow_pair,queue_to_list,train_prepossess
 
 
 def train_batch_dbow(model,
@@ -308,43 +308,47 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
               batch_size=128 #128, #512 #256
               ,sub_batch_size=128 #16 #32 #128 #128  #256 #128 #512 #256 #1
               ):
-        if self.negative>0 and self.hs :
-            self.keras_context_negative_base_index=len(self.vocab)
-            self.keras_context_index_size=len(self.vocab)*2
-            self.keras_syn1=np.vstack((self.syn1,self.syn1neg))
-        else:
-            self.keras_context_negative_base_index=0
-            self.keras_context_index_size=len(self.vocab)
-            if self.hs :
-                self.keras_syn1=self.syn1
-            else:
-                self.keras_syn1=self.syn1neg
-
-        self.neg_labels = []
-        if self.negative > 0:
-            # precompute negative labels optimization for pure-python training
-            self.neg_labels = np.zeros(self.negative + 1,dtype='int8')
-            self.neg_labels[0] = 1
-
         
         if iter!=None:
             self.iter=iter
         if docs==None:
             docs=self.docvecs
+            
+        train_prepossess(self)
         
+        # if self.negative>0 and self.hs :
+        #     self.keras_context_negative_base_index=len(self.vocab)
+        #     self.keras_context_index_size=len(self.vocab)*2
+        #     self.keras_syn1=np.vstack((self.syn1,self.syn1neg))
+        # else:
+        #     self.keras_context_negative_base_index=0
+        #     self.keras_context_index_size=len(self.vocab)
+        #     if self.hs :
+        #         self.keras_syn1=self.syn1
+        #     else:
+        #         self.keras_syn1=self.syn1neg
+
+        # self.neg_labels = []
+        # if self.negative > 0:
+        #     # precompute negative labels optimization for pure-python training
+        #     self.neg_labels = np.zeros(self.negative + 1,dtype='int8')
+        #     self.neg_labels[0] = 1
+        
+
+        # word_context_size_max=0
+        # if self.hs :
+        #     word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
+        # if self.negative > 0:
+        #     word_context_size_max += self.negative + 1
+
         vocab_size=len(self.vocab)
         index_size=len(self.docvecs)
 
-        word_context_size_max=0
-        if self.hs :
-            word_context_size_max += max(len(self.vocab[w].point) for w in self.vocab if hasattr(self.vocab[w],'point'))
-        if self.negative > 0:
-            word_context_size_max += self.negative + 1
-
+            
         self.batch_size=batch_size
         batch_size=batch_size
         if self.sg:
-            samples_per_epoch=max(1,int((word_context_size_max*self.window*2*sum(map(len,docs)))/(sub_batch_size)))
+            samples_per_epoch=max(1,int((self.word_context_size_max*self.window*2*sum(map(len,docs)))/(sub_batch_size)))
             self.kerasmodel=build_keras_model_dbow(index_size=index_size,vector_size=self.vector_size,
                                                    context_size=self.keras_context_index_size,
                                                    model=self,
@@ -358,7 +362,7 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
             self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter,verbose=0)
         else:
             if self.dm_concat:
-                samples_per_epoch=int(word_context_size_max*sum(map(len,docs)))
+                samples_per_epoch=int(self.word_context_size_max*sum(map(len,docs)))
                 self.kerasmodel=build_keras_model_dm_concat(index_size,self.vector_size,vocab_size,
                                                             context_size=self.keras_context_index_size,
                                                             window_size=self.window,
@@ -372,7 +376,7 @@ class Doc2VecKeras(gensim.models.doc2vec.Doc2Vec):
                 self.kerasmodel.fit_generator(gen,samples_per_epoch=samples_per_epoch, nb_epoch=self.iter, verbose=0)
                 self.syn0=self.kerasmodel.nodes['embedword'].get_weights()[0]
             else:
-                samples_per_epoch=int(word_context_size_max*sum(map(len,docs)))
+                samples_per_epoch=int(self.word_context_size_max*sum(map(len,docs)))
                 self.kerasmodel=build_keras_model_dm(index_size,self.vector_size,vocab_size,
                                                      self.keras_context_index_size,
                                                      maxwords=self.window*2+1,
