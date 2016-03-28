@@ -33,5 +33,5 @@ print( brk.most_similar('the', topn=5))
 * Requirements
 
 #+BEGIN_SRC bash
-pip install --upgrade   git+https://github.com/fchollet/keras
+pip install -U keras
 #+END_SRC
