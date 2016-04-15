@@ -182,8 +182,8 @@ def build_keras_model_cbow(index_size,vector_size,
                            model=None,cbow_mean=False):
  
     kerasmodel = Graph()
-    kerasmodel.add_input(name='point' , input_shape=(sub_batch_size,), dtype=int)
-    kerasmodel.add_input(name='index' , input_shape=(1,), dtype=int)
+    kerasmodel.add_input(name='point' , input_shape=(sub_batch_size,), dtype='int')
+    kerasmodel.add_input(name='index' , input_shape=(1,), dtype='int')
     kerasmodel.add_node(Embedding(index_size, vector_size, weights=[model.syn0]),name='embedding', input='index')
     kerasmodel.add_node(Embedding(context_size, vector_size, input_length=sub_batch_size,weights=[model.keras_syn1]),name='embedpoint', input='point')
     if cbow_mean:
